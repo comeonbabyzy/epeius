@@ -63,13 +63,14 @@ if (!isValidSHA224(sha224Password)) {
     throw new Error('sha224Password is not valid');
 }
 */
-
+let EPEIUS_KV;
 let parsedSocks5Address = {}; 
 let enableSocks = false;
 let httpsPorts = ["2053","2083","2087","2096","8443"];
 export default {
 	async fetch(request, env, ctx) {
 		try {
+			EPEIUS_KV = env.EPEIUS_KV
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
 			password = env.PASSWORD || password;
@@ -389,56 +390,81 @@ async function parseTrojanHeader(buffer) {
 }
 
 async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawClientData, webSocket, log, addressType) {
-	async function useSocks5Pattern(address) {
-		if ( go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg==')) ) return true;
-		return go2Socks5s.some(pattern => {
-			let regexPattern = pattern.replace(/\*/g, '.*');
-			let regex = new RegExp(`^${regexPattern}$`, 'i');
-			return regex.test(address);
-		});
-	}
-	async function connectAndWrite(address, port, socks = false) {
-		log(`connected to ${address}:${port}`);
-		//if (/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(address)) address = `${atob('d3d3Lg==')}${address}${atob('LmlwLjA5MDIyNy54eXo=')}`;
-		const tcpSocket = socks ? await socks5Connect(addressType, address, port, log)
-		: connect({
-			hostname: address,
-			port
-		});
-		remoteSocket.value = tcpSocket;
-		//log(`connected to ${address}:${port}`);
-		const writer = tcpSocket.writable.getWriter();
-		await writer.write(rawClientData);
-		writer.releaseLock();
-		return tcpSocket;
-	}
-	async function retry() {
-		if (enableSocks) {
-			tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
-		} else {
-			if (!proxyIP || proxyIP == '') {
-				proxyIP = atob('cHJveHlpcC50cDEuY21saXVzc3NzLmNvbQ==');
-			} else if (proxyIP.includes(']:')) {
-				portRemote = proxyIP.split(']:')[1] || portRemote;
-				proxyIP = proxyIP.split(']:')[0] || proxyIP;
-			} else if (proxyIP.split(':').length === 2) {
-				portRemote = proxyIP.split(':')[1] || portRemote;
-				proxyIP = proxyIP.split(':')[0] || proxyIP;
-			}
-			if (proxyIP.includes('.tp')) portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
-			tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
-		}
-		tcpSocket.closed.catch((error) => {
-			console.log("retry tcpSocket closed error", error);
-		}).finally(() => {
-			safeCloseWebSocket(webSocket);
-		});
-		remoteSocketToWS(tcpSocket, webSocket, null, log);
-	}
-	let useSocks = false;
-	if( go2Socks5s.length > 0 && enableSocks ) useSocks = await useSocks5Pattern(addressRemote);
-	let tcpSocket = await connectAndWrite(addressRemote, portRemote, useSocks);
-	remoteSocketToWS(tcpSocket, webSocket, retry, log);
+    let addressInKV = false; // 新增标记，记录地址是否已在KV中
+
+    async function useSocks5Pattern(address) {
+        // 首先检查 KV 中是否已存储该地址的 socks5 配置
+        try {
+            const storedSocks5 = await EPEIUS_KV.get(address);
+            if (storedSocks5) {
+                addressInKV = true; // 设置标记
+                return true;
+            }
+        } catch (error) {
+            log(`KV read error: ${error}`);
+        }
+
+        // 如果 KV 中没有，则按原有逻辑判断
+        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
+        return go2Socks5s.some(pattern => {
+            let regexPattern = pattern.replace(/\*/g, '.*');
+            let regex = new RegExp(`^${regexPattern}$`, 'i');
+            return regex.test(address);
+        });
+    }
+
+    async function connectAndWrite(address, port, socks = false) {
+        log(`connected to ${address}:${port}`);
+        const tcpSocket = socks ? await socks5Connect(addressType, address, port, log)
+            : connect({
+                hostname: address,
+                port
+            });
+        
+        // 只有当使用 socks5 连接成功且地址不在 KV 中时，才存储
+        if (socks && tcpSocket && !addressInKV) {
+            try {
+                await EPEIUS_KV.put(address, 'true', {expirationTtl: 86400}); // 24小时过期
+                log(`Stored socks5 config for ${address} in KV`);
+            } catch (error) {
+                log(`KV write error: ${error}`);
+            }
+        }
+
+        remoteSocket.value = tcpSocket;
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(rawClientData);
+        writer.releaseLock();
+        return tcpSocket;
+    }
+
+    async function retry() {
+        if (enableSocks) {
+            tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
+        } else {
+            if (!proxyIP || proxyIP == '') {
+                proxyIP = atob('cHJveHlpcC50cDEuY21saXVzc3NzLmNvbQ==');
+            } else if (proxyIP.includes(']:')) {
+                portRemote = proxyIP.split(']:')[1] || portRemote;
+                proxyIP = proxyIP.split(']:')[0] || proxyIP;
+            } else if (proxyIP.split(':').length === 2) {
+                portRemote = proxyIP.split(':')[1] || portRemote;
+                proxyIP = proxyIP.split(':')[0] || proxyIP;
+            }
+            if (proxyIP.includes('.tp')) portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
+            tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
+        }
+        tcpSocket.closed.catch((error) => {
+            console.log("retry tcpSocket closed error", error);
+        }).finally(() => {
+            safeCloseWebSocket(webSocket);
+        });
+        remoteSocketToWS(tcpSocket, webSocket, null, log);
+    }
+    let useSocks = false;
+    if( go2Socks5s.length > 0 && enableSocks ) useSocks = await useSocks5Pattern(addressRemote);
+    let tcpSocket = await connectAndWrite(addressRemote, portRemote, useSocks);
+    remoteSocketToWS(tcpSocket, webSocket, retry, log);
 }
 
 function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
