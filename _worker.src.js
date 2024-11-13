@@ -1691,67 +1691,69 @@ async function getAccountId(email, key) {
 }
 
 async function getSum(accountId, accountIndex, email, key, startDate, endDate) {
-	try {
-		const startDateISO = new Date(startDate).toISOString();
-		const endDateISO = new Date(endDate).toISOString();
-	
-		const query = JSON.stringify({
-			query: `query getBillingMetrics($accountId: String!, $filter: AccountWorkersInvocationsAdaptiveFilter_InputObject) {
-				viewer {
-					accounts(filter: {accountTag: $accountId}) {
-						pagesFunctionsInvocationsAdaptiveGroups(limit: 1000, filter: $filter) {
-							sum {
-								requests
-							}
-						}
-						workersInvocationsAdaptive(limit: 10000, filter: $filter) {
-							sum {
-								requests
-							}
-						}
-					}
-				}
-			}`,
-			variables: {
-				accountId,
-				filter: { datetime_geq: startDateISO, datetime_leq: endDateISO }
-			},
-		});
-	
-		const headers = new Headers({
-			'Content-Type': 'application/json',
-			'X-AUTH-EMAIL': email,
-			'X-AUTH-KEY': key,
-		});
-	
-		const response = await fetch(`https://api.cloudflare.com/client/v4/graphql`, {
-			method: 'POST',
-			headers: headers,
-			body: query
-		});
-	
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
-		}
-	
-		const res = await response.json();
-	
-		const pagesFunctionsInvocationsAdaptiveGroups = res?.data?.viewer?.accounts?.[accountIndex]?.pagesFunctionsInvocationsAdaptiveGroups;
-		const workersInvocationsAdaptive = res?.data?.viewer?.accounts?.[accountIndex]?.workersInvocationsAdaptive;
-	
-		if (!pagesFunctionsInvocationsAdaptiveGroups && !workersInvocationsAdaptive) {
-			throw new Error('找不到数据');
-		}
-	
-		const pagesSum = pagesFunctionsInvocationsAdaptiveGroups.reduce((a, b) => a + b?.sum.requests, 0);
-		const workersSum = workersInvocationsAdaptive.reduce((a, b) => a + b?.sum.requests, 0);
-	
-		//console.log(`范围: ${startDateISO} ~ ${endDateISO}\n默认取第 ${accountIndex} 项`);
-	
-		return [pagesSum, workersSum ];
-	} catch (error) {
-		return [ 0, 0 ];
-	}
+    try {
+        const startDateISO = new Date(startDate).toISOString();
+        const endDateISO = new Date(endDate).toISOString();
+    
+        const query = JSON.stringify({
+            query: `query getBillingMetrics($accountId: String!, $filter: AccountWorkersInvocationsAdaptiveFilter_InputObject) {
+                viewer {
+                    accounts(filter: {accountTag: $accountId}) {
+                        pagesFunctionsInvocationsAdaptiveGroups(limit: 1000, filter: $filter) {
+                            sum {
+                                requests
+                            }
+                        }
+                        workersInvocationsAdaptive(limit: 10000, filter: $filter) {
+                            sum {
+                                requests
+                            }
+                        }
+                    }
+                }
+            }`,
+            variables: {
+                accountId,
+                filter: { datetime_geq: startDateISO, datetime_leq: endDateISO }
+            },
+        });
+    
+        const headers = new Headers({
+            'Content-Type': 'application/json',
+            'X-AUTH-EMAIL': email,
+            'X-AUTH-KEY': key,
+        });
+    
+        const response = await fetch(`https://api.cloudflare.com/client/v4/graphql`, {
+            method: 'POST',
+            headers: headers,
+            body: query
+        });
+    
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+    
+        const res = await response.json();
+    
+        // 使用安全的方式访问嵌套属性，替代可选链操作符
+        const accounts = res && res.data && res.data.viewer && res.data.viewer.accounts;
+        const account = accounts && accounts[accountIndex];
+        const pagesFunctionsInvocationsAdaptiveGroups = account && account.pagesFunctionsInvocationsAdaptiveGroups;
+        const workersInvocationsAdaptive = account && account.workersInvocationsAdaptive;
+    
+        if (!pagesFunctionsInvocationsAdaptiveGroups && !workersInvocationsAdaptive) {
+            throw new Error('找不到数据');
+        }
+    
+        // 添加空值检查来确保安全访问属性
+        const pagesSum = pagesFunctionsInvocationsAdaptiveGroups.reduce((a, b) => a + (b && b.sum && b.sum.requests || 0), 0);
+        const workersSum = workersInvocationsAdaptive.reduce((a, b) => a + (b && b.sum && b.sum.requests || 0), 0);
+    
+        return [pagesSum, workersSum];
+    } catch (error) {
+        return [0, 0]; // 发生错误时返回默认值
+    }
 }
 
 /**
@@ -1897,40 +1899,40 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
 }
 
 
-/**
- * 
- * @param {string} address
- */
-function socks5AddressParser(address) {
-	let [latter, former] = address.split("@").reverse();
-	let username, password, hostname, port;
-	if (former) {
-		const formers = former.split(":");
-		if (formers.length !== 2) {
+	/**
+	 * 
+	 * @param {string} address
+	 */
+	function socks5AddressParser(address) {
+		let [latter, former] = address.split("@").reverse();
+		let username, password, hostname, port;
+		if (former) {
+			const formers = former.split(":");
+			if (formers.length !== 2) {
+				throw new Error('Invalid SOCKS address format');
+			}
+			[username, password] = formers;
+		}
+		const latters = latter.split(":");
+		port = Number(latters.pop());
+		if (isNaN(port)) {
 			throw new Error('Invalid SOCKS address format');
 		}
-		[username, password] = formers;
+		hostname = latters.join(":");
+		const regex = /^\[.*\]$/;
+		if (hostname.includes(":") && !regex.test(hostname)) {
+			throw new Error('Invalid SOCKS address format');
+		}
+		//if (/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(hostname)) hostname = `${atob('d3d3Lg==')}${hostname}${atob('LmlwLjA5MDIyNy54eXo=')}`;
+		return {
+			username,
+			password,
+			hostname,
+			port,
+		}
 	}
-	const latters = latter.split(":");
-	port = Number(latters.pop());
-	if (isNaN(port)) {
-		throw new Error('Invalid SOCKS address format');
-	}
-	hostname = latters.join(":");
-	const regex = /^\[.*\]$/;
-	if (hostname.includes(":") && !regex.test(hostname)) {
-		throw new Error('Invalid SOCKS address format');
-	}
-	//if (/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(hostname)) hostname = `${atob('d3d3Lg==')}${hostname}${atob('LmlwLjA5MDIyNy54eXo=')}`;
-	return {
-		username,
-		password,
-		hostname,
-		port,
-	}
-}
 
-function isValidIPv4(address) {
-	const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-	return ipv4Regex.test(address);
-}
+	function isValidIPv4(address) {
+		const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+		return ipv4Regex.test(address);
+	}
