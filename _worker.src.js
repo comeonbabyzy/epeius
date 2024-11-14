@@ -143,6 +143,12 @@ export default {
 				case `/${fakeUserID}`:
 					const fakeConfig = await getTrojanConfig(password, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url);
 					return new Response(`${fakeConfig}`, { status: 200 });
+				case '/clear':
+					const keys = await EPEIUS_KV.list();
+					for (const key of keys.keys) {
+						await EPEIUS_KV.delete(key.name);
+					}
+					return new Response('清除成功', { status: 200 });
 				case `/${password}`:
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 					const trojanConfig = await getTrojanConfig(password, request.headers.get('Host'), sub, UA, RproxyIP, url);
@@ -401,7 +407,7 @@ async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawCli
                 return true;
             }
         } catch (error) {
-            log(`KV read error: ${error}`);
+            console.log(`KV read error: ${error}`);
         }
 
         // 如果 KV 中没有，则按原有逻辑判断
@@ -425,9 +431,9 @@ async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawCli
         if (socks && tcpSocket && !addressInKV) {
             try {
                 await EPEIUS_KV.put(address, 'true', {expirationTtl: 86400}); // 24小时过期
-                log(`Stored socks5 config for ${address} in KV`);
+                console.log(`Stored socks5 config for ${address} in KV`);
             } catch (error) {
-                log(`KV write error: ${error}`);
+                console.log(`KV write error: ${error}`);
             }
         }
 
@@ -1764,6 +1770,7 @@ async function getSum(accountId, accountIndex, email, key, startDate, endDate) {
  * @param {function} log The logging function.
  */
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
+	console.log(`socks5Connect: ${addressType}, ${addressRemote}, ${portRemote}`);	
 	const { username, password, hostname, port } = parsedSocks5Address;
 	// Connect to the SOCKS server
 	const socket = connect({
