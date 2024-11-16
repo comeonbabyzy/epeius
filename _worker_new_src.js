@@ -63,13 +63,14 @@ if (!isValidSHA224(sha224Password)) {
     throw new Error('sha224Password is not valid');
 }
 */
-
+let EPEIUS_KV;
 let parsedSocks5Address = {}; 
 let enableSocks = false;
 let httpsPorts = ["2053","2083","2087","2096","8443"];
 export default {
 	async fetch(request, env, ctx) {
 		try {
+			EPEIUS_KV = env.EPEIUS_KV
 			const UA = request.headers.get('User-Agent') || 'null';
 			const userAgent = UA.toLowerCase();
 			password = env.PASSWORD || password;
@@ -142,6 +143,12 @@ export default {
 				case `/${fakeUserID}`:
 					const fakeConfig = await getTrojanConfig(password, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url);
 					return new Response(`${fakeConfig}`, { status: 200 });
+				case '/clear':
+					const keys = await EPEIUS_KV.list();
+					for (const key of keys.keys) {
+						await EPEIUS_KV.delete(key.name);
+					}
+					return new Response('清除成功', { status: 200 });
 				case `/${password}`:
 					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 					const trojanConfig = await getTrojanConfig(password, request.headers.get('Host'), sub, UA, RproxyIP, url);
@@ -389,56 +396,81 @@ async function parseTrojanHeader(buffer) {
 }
 
 async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawClientData, webSocket, log, addressType) {
-	async function useSocks5Pattern(address) {
-		if ( go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg==')) ) return true;
-		return go2Socks5s.some(pattern => {
-			let regexPattern = pattern.replace(/\*/g, '.*');
-			let regex = new RegExp(`^${regexPattern}$`, 'i');
-			return regex.test(address);
-		});
-	}
-	async function connectAndWrite(address, port, socks = false) {
-		log(`connected to ${address}:${port}`);
-		//if (/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(address)) address = `${atob('d3d3Lg==')}${address}${atob('LmlwLjA5MDIyNy54eXo=')}`;
-		const tcpSocket = socks ? await socks5Connect(addressType, address, port, log)
-		: connect({
-			hostname: address,
-			port
-		});
-		remoteSocket.value = tcpSocket;
-		//log(`connected to ${address}:${port}`);
-		const writer = tcpSocket.writable.getWriter();
-		await writer.write(rawClientData);
-		writer.releaseLock();
-		return tcpSocket;
-	}
-	async function retry() {
-		if (enableSocks) {
-			tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
-		} else {
-			if (!proxyIP || proxyIP == '') {
-				proxyIP = atob('cHJveHlpcC50cDEuY21saXVzc3NzLmNvbQ==');
-			} else if (proxyIP.includes(']:')) {
-				portRemote = proxyIP.split(']:')[1] || portRemote;
-				proxyIP = proxyIP.split(']:')[0] || proxyIP;
-			} else if (proxyIP.split(':').length === 2) {
-				portRemote = proxyIP.split(':')[1] || portRemote;
-				proxyIP = proxyIP.split(':')[0] || proxyIP;
-			}
-			if (proxyIP.includes('.tp')) portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
-			tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
-		}
-		tcpSocket.closed.catch((error) => {
-			console.log("retry tcpSocket closed error", error);
-		}).finally(() => {
-			safeCloseWebSocket(webSocket);
-		});
-		remoteSocketToWS(tcpSocket, webSocket, null, log);
-	}
-	let useSocks = false;
-	if( go2Socks5s.length > 0 && enableSocks ) useSocks = await useSocks5Pattern(addressRemote);
-	let tcpSocket = await connectAndWrite(addressRemote, portRemote, useSocks);
-	remoteSocketToWS(tcpSocket, webSocket, retry, log);
+    let addressInKV = false; // 新增标记，记录地址是否已在KV中
+
+    async function useSocks5Pattern(address) {
+        // 首先检查 KV 中是否已存储该地址的 socks5 配置
+        try {
+            const storedSocks5 = await EPEIUS_KV.get(address);
+            if (storedSocks5) {
+                addressInKV = true; // 设置标记
+                return true;
+            }
+        } catch (error) {
+            console.log(`KV read error: ${error}`);
+        }
+
+        // 如果 KV 中没有，则按原有逻辑判断
+        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
+        return go2Socks5s.some(pattern => {
+            let regexPattern = pattern.replace(/\*/g, '.*');
+            let regex = new RegExp(`^${regexPattern}$`, 'i');
+            return regex.test(address);
+        });
+    }
+
+    async function connectAndWrite(address, port, socks = false) {
+        log(`connected to ${address}:${port}`);
+        const tcpSocket = socks ? await socks5Connect(addressType, address, port, log)
+            : connect({
+                hostname: address,
+                port
+            });
+        
+        // 只有当使用 socks5 连接成功且地址不在 KV 中时，才存储
+        if (socks && tcpSocket && !addressInKV) {
+            try {
+                await EPEIUS_KV.put(address, 'true', {expirationTtl: 86400}); // 24小时过期
+                console.log(`Stored socks5 config for ${address} in KV`);
+            } catch (error) {
+                console.log(`KV write error: ${error}`);
+            }
+        }
+
+        remoteSocket.value = tcpSocket;
+        const writer = tcpSocket.writable.getWriter();
+        await writer.write(rawClientData);
+        writer.releaseLock();
+        return tcpSocket;
+    }
+
+    async function retry() {
+        if (enableSocks) {
+            tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
+        } else {
+            if (!proxyIP || proxyIP == '') {
+                proxyIP = atob('cHJveHlpcC50cDEuY21saXVzc3NzLmNvbQ==');
+            } else if (proxyIP.includes(']:')) {
+                portRemote = proxyIP.split(']:')[1] || portRemote;
+                proxyIP = proxyIP.split(']:')[0] || proxyIP;
+            } else if (proxyIP.split(':').length === 2) {
+                portRemote = proxyIP.split(':')[1] || portRemote;
+                proxyIP = proxyIP.split(':')[0] || proxyIP;
+            }
+            if (proxyIP.includes('.tp')) portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
+            tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
+        }
+        tcpSocket.closed.catch((error) => {
+            console.log("retry tcpSocket closed error", error);
+        }).finally(() => {
+            safeCloseWebSocket(webSocket);
+        });
+        remoteSocketToWS(tcpSocket, webSocket, null, log);
+    }
+    let useSocks = false;
+    if( go2Socks5s.length > 0 && enableSocks ) useSocks = await useSocks5Pattern(addressRemote);
+    let tcpSocket = await connectAndWrite(addressRemote, portRemote, useSocks);
+    remoteSocketToWS(tcpSocket, webSocket, retry, log);
 }
 
 function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
@@ -1665,67 +1697,69 @@ async function getAccountId(email, key) {
 }
 
 async function getSum(accountId, accountIndex, email, key, startDate, endDate) {
-	try {
-		const startDateISO = new Date(startDate).toISOString();
-		const endDateISO = new Date(endDate).toISOString();
-	
-		const query = JSON.stringify({
-			query: `query getBillingMetrics($accountId: String!, $filter: AccountWorkersInvocationsAdaptiveFilter_InputObject) {
-				viewer {
-					accounts(filter: {accountTag: $accountId}) {
-						pagesFunctionsInvocationsAdaptiveGroups(limit: 1000, filter: $filter) {
-							sum {
-								requests
-							}
-						}
-						workersInvocationsAdaptive(limit: 10000, filter: $filter) {
-							sum {
-								requests
-							}
-						}
-					}
-				}
-			}`,
-			variables: {
-				accountId,
-				filter: { datetime_geq: startDateISO, datetime_leq: endDateISO }
-			},
-		});
-	
-		const headers = new Headers({
-			'Content-Type': 'application/json',
-			'X-AUTH-EMAIL': email,
-			'X-AUTH-KEY': key,
-		});
-	
-		const response = await fetch(`https://api.cloudflare.com/client/v4/graphql`, {
-			method: 'POST',
-			headers: headers,
-			body: query
-		});
-	
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
-		}
-	
-		const res = await response.json();
-	
-		const pagesFunctionsInvocationsAdaptiveGroups = res?.data?.viewer?.accounts?.[accountIndex]?.pagesFunctionsInvocationsAdaptiveGroups;
-		const workersInvocationsAdaptive = res?.data?.viewer?.accounts?.[accountIndex]?.workersInvocationsAdaptive;
-	
-		if (!pagesFunctionsInvocationsAdaptiveGroups && !workersInvocationsAdaptive) {
-			throw new Error('找不到数据');
-		}
-	
-		const pagesSum = pagesFunctionsInvocationsAdaptiveGroups.reduce((a, b) => a + b?.sum.requests, 0);
-		const workersSum = workersInvocationsAdaptive.reduce((a, b) => a + b?.sum.requests, 0);
-	
-		//console.log(`范围: ${startDateISO} ~ ${endDateISO}\n默认取第 ${accountIndex} 项`);
-	
-		return [pagesSum, workersSum ];
-	} catch (error) {
-		return [ 0, 0 ];
-	}
+    try {
+        const startDateISO = new Date(startDate).toISOString();
+        const endDateISO = new Date(endDate).toISOString();
+    
+        const query = JSON.stringify({
+            query: `query getBillingMetrics($accountId: String!, $filter: AccountWorkersInvocationsAdaptiveFilter_InputObject) {
+                viewer {
+                    accounts(filter: {accountTag: $accountId}) {
+                        pagesFunctionsInvocationsAdaptiveGroups(limit: 1000, filter: $filter) {
+                            sum {
+                                requests
+                            }
+                        }
+                        workersInvocationsAdaptive(limit: 10000, filter: $filter) {
+                            sum {
+                                requests
+                            }
+                        }
+                    }
+                }
+            }`,
+            variables: {
+                accountId,
+                filter: { datetime_geq: startDateISO, datetime_leq: endDateISO }
+            },
+        });
+    
+        const headers = new Headers({
+            'Content-Type': 'application/json',
+            'X-AUTH-EMAIL': email,
+            'X-AUTH-KEY': key,
+        });
+    
+        const response = await fetch(`https://api.cloudflare.com/client/v4/graphql`, {
+            method: 'POST',
+            headers: headers,
+            body: query
+        });
+    
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+    
+        const res = await response.json();
+    
+        // 使用安全的方式访问嵌套属性，替代可选链操作符
+        const accounts = res && res.data && res.data.viewer && res.data.viewer.accounts;
+        const account = accounts && accounts[accountIndex];
+        const pagesFunctionsInvocationsAdaptiveGroups = account && account.pagesFunctionsInvocationsAdaptiveGroups;
+        const workersInvocationsAdaptive = account && account.workersInvocationsAdaptive;
+    
+        if (!pagesFunctionsInvocationsAdaptiveGroups && !workersInvocationsAdaptive) {
+            throw new Error('找不到数据');
+        }
+    
+        // 添加空值检查来确保安全访问属性
+        const pagesSum = pagesFunctionsInvocationsAdaptiveGroups.reduce((a, b) => a + (b && b.sum && b.sum.requests || 0), 0);
+        const workersSum = workersInvocationsAdaptive.reduce((a, b) => a + (b && b.sum && b.sum.requests || 0), 0);
+    
+        return [pagesSum, workersSum];
+    } catch (error) {
+        return [0, 0]; // 发生错误时返回默认值
+    }
 }
 
 /**
@@ -1736,6 +1770,7 @@ async function getSum(accountId, accountIndex, email, key, startDate, endDate) {
  * @param {function} log The logging function.
  */
 async function socks5Connect(addressType, addressRemote, portRemote, log) {
+	console.log(`socks5Connect: ${addressType}, ${addressRemote}, ${portRemote}`);	
 	const { username, password, hostname, port } = parsedSocks5Address;
 	// Connect to the SOCKS server
 	const socket = connect({
@@ -1871,40 +1906,40 @@ async function socks5Connect(addressType, addressRemote, portRemote, log) {
 }
 
 
-/**
- * 
- * @param {string} address
- */
-function socks5AddressParser(address) {
-	let [latter, former] = address.split("@").reverse();
-	let username, password, hostname, port;
-	if (former) {
-		const formers = former.split(":");
-		if (formers.length !== 2) {
+	/**
+	 * 
+	 * @param {string} address
+	 */
+	function socks5AddressParser(address) {
+		let [latter, former] = address.split("@").reverse();
+		let username, password, hostname, port;
+		if (former) {
+			const formers = former.split(":");
+			if (formers.length !== 2) {
+				throw new Error('Invalid SOCKS address format');
+			}
+			[username, password] = formers;
+		}
+		const latters = latter.split(":");
+		port = Number(latters.pop());
+		if (isNaN(port)) {
 			throw new Error('Invalid SOCKS address format');
 		}
-		[username, password] = formers;
+		hostname = latters.join(":");
+		const regex = /^\[.*\]$/;
+		if (hostname.includes(":") && !regex.test(hostname)) {
+			throw new Error('Invalid SOCKS address format');
+		}
+		//if (/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(hostname)) hostname = `${atob('d3d3Lg==')}${hostname}${atob('LmlwLjA5MDIyNy54eXo=')}`;
+		return {
+			username,
+			password,
+			hostname,
+			port,
+		}
 	}
-	const latters = latter.split(":");
-	port = Number(latters.pop());
-	if (isNaN(port)) {
-		throw new Error('Invalid SOCKS address format');
-	}
-	hostname = latters.join(":");
-	const regex = /^\[.*\]$/;
-	if (hostname.includes(":") && !regex.test(hostname)) {
-		throw new Error('Invalid SOCKS address format');
-	}
-	//if (/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(hostname)) hostname = `${atob('d3d3Lg==')}${hostname}${atob('LmlwLjA5MDIyNy54eXo=')}`;
-	return {
-		username,
-		password,
-		hostname,
-		port,
-	}
-}
 
-function isValidIPv4(address) {
-	const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-	return ipv4Regex.test(address);
-}
+	function isValidIPv4(address) {
+		const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+		return ipv4Regex.test(address);
+	}
