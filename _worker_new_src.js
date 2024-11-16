@@ -67,6 +67,7 @@ let EPEIUS_KV;
 let parsedSocks5Address = {}; 
 let enableSocks = false;
 let httpsPorts = ["2053","2083","2087","2096","8443"];
+
 export default {
 	async fetch(request, env, ctx) {
 		try {
@@ -90,8 +91,10 @@ export default {
 			proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
 			socks5Address = env.SOCKS5 || socks5Address;
 			socks5s = await ADD(socks5Address);
+			// 对socks5s中每一项进行处理
+			socks5s = socks5s.map(addr => addr.split('//')[1] || addr);
 			socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
-			socks5Address = socks5Address.split('//')[1] || socks5Address;
+			
 			if (env.CFPORTS) httpsPorts = await ADD(env.CFPORTS);
 			sub = env.SUB || sub;
 			subconverter = env.SUBAPI || subconverter;
@@ -395,83 +398,172 @@ async function parseTrojanHeader(buffer) {
 	};
 }
 
+/**
+ * 处理TCP出口连接的异步函数
+ *
+ * @param {object} remoteSocket - 远程套接字对象，用于与客户端通信
+ * @param {string} addressRemote - 目标远程地址
+ * @param {number} portRemote - 目标远程端口
+ * @param {Uint8Array} rawClientData - 原始客户端数据
+ * @param {WebSocket} webSocket - WebSocket连接对象
+ * @param {function} log - 日志记录函数
+ * @param {number} addressType - 地址类型（1: IPv4, 3: 域名, 4: IPv6）
+ */
 async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawClientData, webSocket, log, addressType) {
-    let addressInKV = false; // 新增标记，记录地址是否已在KV中
+    let storedSocks5Address = null; // 存储从KV中读取的socks5地址
 
+    /**
+     * 判断是否使用Socks5模式的辅助函数
+     *
+     * @param {string} address - 需要检查的地址
+     * @returns {boolean} - 是否使用Socks5模式
+     */
     async function useSocks5Pattern(address) {
         // 首先检查 KV 中是否已存储该地址的 socks5 配置
         try {
-            const storedSocks5 = await EPEIUS_KV.get(address);
-            if (storedSocks5) {
-                addressInKV = true; // 设置标记
-                return true;
+            storedSocks5Address = await EPEIUS_KV.get(address);
+            if (storedSocks5Address) {
+                // 检查KV中存储的socks5地址是否在socks5s列表中
+                if (!socks5s.includes(storedSocks5Address)) {
+                    // 如果不在列表中，删除该KV值
+                    //await EPEIUS_KV.delete(address);
+                    //console.log(`已删除无效的Socks5配置: ${address} -> ${storedSocks5Address}`);
+                    storedSocks5Address = null;
+                } else {
+                    return true;
+                }
             }
         } catch (error) {
-            console.log(`KV read error: ${error}`);
+            console.log(`KV读取错误: ${error}`);
         }
 
-        // 如果 KV 中没有，则按原有逻辑判断
+        // 如果 KV 中没有有效值，则按原有逻辑判断
         if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
+        
+        // 遍历所有socks5模式，使用正则表达式进行匹配
         return go2Socks5s.some(pattern => {
-            let regexPattern = pattern.replace(/\*/g, '.*');
-            let regex = new RegExp(`^${regexPattern}$`, 'i');
-            return regex.test(address);
+            let regexPattern = pattern.replace(/\*/g, '.*'); // 将通配符*替换为.*
+            let regex = new RegExp(`^${regexPattern}$`, 'i'); // 创建不区分大小写的正则表达式
+            return regex.test(address); // 测试地址是否匹配当前模式
         });
     }
 
+    /**
+     * 连接到目标地址并写入数据的辅助函数
+     *
+     * @param {string} address - 目标地址
+     * @param {number} port - 目标端口
+     * @param {boolean} socks - 是否使用Socks5代理
+     * @returns {object} - 返回连接的tcpSocket对象
+     */
     async function connectAndWrite(address, port, socks = false) {
-        log(`connected to ${address}:${port}`);
-        const tcpSocket = socks ? await socks5Connect(addressType, address, port, log)
-            : connect({
+        log(`已连接到 ${address}:${port}`);
+        
+        let tcpSocket = null;
+        
+        if (socks) {
+            // 如果有存储的代理地址，先尝试使用它
+            if (storedSocks5Address) {
+                try {
+                    tcpSocket = await socks5Connect(addressType, address, port, storedSocks5Address, log);
+                } catch (error) {
+                    console.log(`使用存储的代理地址连接失败: ${error}`);
+                    tcpSocket = null;
+                }
+            }
+            
+            // 如果存储的代理连接失败或没有存储的代理，则依次尝试其他代理
+            if (!tcpSocket) {
+                for (const socks5Addr of socks5s) {
+                    if (socks5Addr === storedSocks5Address) continue; // 跳过已尝试过的代理
+                    try {
+                        tcpSocket = await socks5Connect(addressType, address, port, socks5Addr, log);
+                        if (tcpSocket) {
+                            // 连接成功，更新KV存储
+                            try {
+                                await EPEIUS_KV.put(address, socks5Addr, {expirationTtl: 86400});
+                                console.log(`已将Socks5配置存储到KV: ${address} -> ${socks5Addr}`);
+                            } catch (error) {
+                                console.log(`KV写入错误: ${error}`);
+                            }
+                            break;
+                        }
+                    } catch (error) {
+                        console.log(`尝试代理 ${socks5Addr} 连接失败: ${error}`);
+                        continue;
+                    }
+                }
+            }
+            
+            if (!tcpSocket) {
+                throw new Error('所有Socks5代理连接均失败');
+            }
+        } else {
+            tcpSocket = connect({ // 直接连接
                 hostname: address,
                 port
             });
-        
-        // 只有当使用 socks5 连接成功且地址不在 KV 中时，才存储
-        if (socks && tcpSocket && !addressInKV) {
-            try {
-                await EPEIUS_KV.put(address, 'true', {expirationTtl: 86400}); // 24小时过期
-                console.log(`Stored socks5 config for ${address} in KV`);
-            } catch (error) {
-                console.log(`KV write error: ${error}`);
-            }
         }
 
-        remoteSocket.value = tcpSocket;
-        const writer = tcpSocket.writable.getWriter();
-        await writer.write(rawClientData);
-        writer.releaseLock();
-        return tcpSocket;
+        remoteSocket.value = tcpSocket; // 将tcpSocket赋值给remoteSocket
+        const writer = tcpSocket.writable.getWriter(); // 获取tcpSocket的可写流
+        await writer.write(rawClientData); // 写入原始客户端数据
+        writer.releaseLock(); // 释放锁
+        return tcpSocket; // 返回tcpSocket对象
     }
 
+    /**
+     * 重新尝试连接的辅助函数
+     */
     async function retry() {
         if (enableSocks) {
+            // 如果启用了Socks5，尝试使用Socks5连接
             tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
         } else {
-            if (!proxyIP || proxyIP == '') {
-                proxyIP = atob('cHJveHlpcC50cDEuY21saXVzc3NzLmNvbQ==');
+            // 否则，处理代理IP的逻辑
+            if (!proxyIP || proxyIP === '') {
+                proxyIP = atob('cHJveHlpcC50cDEuY21saXVzc3NzLmNvbQ=='); // 解码默认的代理IP
             } else if (proxyIP.includes(']:')) {
+                // 如果proxyIP包含']:'，则分离IP和端口
                 portRemote = proxyIP.split(']:')[1] || portRemote;
                 proxyIP = proxyIP.split(']:')[0] || proxyIP;
             } else if (proxyIP.split(':').length === 2) {
+                // 如果proxyIP格式为'IP:Port'，则分离IP和端口
                 portRemote = proxyIP.split(':')[1] || portRemote;
                 proxyIP = proxyIP.split(':')[0] || proxyIP;
             }
-            if (proxyIP.includes('.tp')) portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
+            if (proxyIP.includes('.tp')) {
+                // 如果proxyIP包含'.tp'，进一步提取端口
+                portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
+            }
+            // 尝试连接到代理IP或addressRemote
             tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
         }
+
+        // 监听tcpSocket关闭事件，处理错误
         tcpSocket.closed.catch((error) => {
-            console.log("retry tcpSocket closed error", error);
+            console.log("重试时tcpSocket关闭错误", error);
         }).finally(() => {
-            safeCloseWebSocket(webSocket);
+            safeCloseWebSocket(webSocket); // 关闭WebSocket连接
         });
+
+        // 将远程tcpSocket连接到WebSocket
         remoteSocketToWS(tcpSocket, webSocket, null, log);
     }
+
     let useSocks = false;
-    if( go2Socks5s.length > 0 && enableSocks ) useSocks = await useSocks5Pattern(addressRemote);
+    // 如果配置了Socks5模式且启用了Socks5代理，则判断是否使用Socks5
+    if (go2Socks5s.length > 0 && enableSocks) {
+        useSocks = await useSocks5Pattern(addressRemote);
+    }
+
+    // 连接到目标地址并写入数据
     let tcpSocket = await connectAndWrite(addressRemote, portRemote, useSocks);
+    
+    // 将tcpSocket连接到WebSocket，并传入retry函数以便在需要时重试
     remoteSocketToWS(tcpSocket, webSocket, retry, log);
 }
+
 
 function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
 	let readableStreamCancel = false;
@@ -1769,8 +1861,10 @@ async function getSum(accountId, accountIndex, email, key, startDate, endDate) {
  * @param {number} portRemote
  * @param {function} log The logging function.
  */
-async function socks5Connect(addressType, addressRemote, portRemote, log) {
-	console.log(`socks5Connect: ${addressType}, ${addressRemote}, ${portRemote}`);	
+async function socks5Connect(addressType, addressRemote, portRemote, socks5URL, log) {
+	console.log(`socks5Connect: ${addressType}, ${addressRemote}, ${portRemote}`);
+
+	parsedSocks5Address = socks5AddressParser(socks5URL);
 	const { username, password, hostname, port } = parsedSocks5Address;
 	// Connect to the SOCKS server
 	const socket = connect({
