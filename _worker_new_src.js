@@ -28,7 +28,7 @@ let addresses = [
 	*/
 ];
 
-let sub = ''; 
+let sub = '';
 let subconverter = 'SUBAPI.fxxk.dedyn.io';// clash订阅转换后端，目前使用CM的订阅转换功能。自带虚假节点信息防泄露
 let subconfig = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/config/ACL4SSR_Online_Mini_MultiMode.ini"; //订阅配置文件
 let subProtocol = 'https';
@@ -39,8 +39,8 @@ let addressescsv = [];
 let DLS = 8;
 
 let FileName = 'epeius';
-let BotToken ='';
-let ChatID =''; 
+let BotToken = '';
+let ChatID = '';
 let proxyhosts = [];//本地代理域名池
 let proxyhostsURL = 'https://raw.githubusercontent.com/cmliu/CFcdnVmess2sub/main/proxyhosts';//在线代理域名池URL
 let go2Socks5s = [
@@ -50,23 +50,23 @@ let go2Socks5s = [
 	'*.loadshare.org',
 ];
 
-let fakeUserID ;
-let fakeHostName ;
-let proxyIPs ;
+let fakeUserID;
+let fakeHostName;
+let proxyIPs;
 let socks5s;
-let sha224Password ;
+let sha224Password;
 const expire = 4102329600;//2099-12-31
 const regex = /^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[.*\]):?(\d+)?#?(.*)?$/;
 
 /*
 if (!isValidSHA224(sha224Password)) {
-    throw new Error('sha224Password is not valid');
+	throw new Error('sha224Password is not valid');
 }
 */
 let EPEIUS_KV;
-let parsedSocks5Address = {}; 
+let parsedSocks5Address = {};
 let enableSocks = false;
-let httpsPorts = ["2053","2083","2087","2096","8443"];
+let httpsPorts = ["2053", "2083", "2087", "2096", "8443"];
 
 export default {
 	async fetch(request, env, ctx) {
@@ -85,7 +85,7 @@ export default {
 			fakeUserID = fakeUserIDMD5.slice(0, 8) + "-" + fakeUserIDMD5.slice(8, 12) + "-" + fakeUserIDMD5.slice(12, 16) + "-" + fakeUserIDMD5.slice(16, 20) + "-" + fakeUserIDMD5.slice(20);
 			fakeHostName = fakeUserIDMD5.slice(6, 9) + "." + fakeUserIDMD5.slice(13, 19);
 			//console.log(fakeUserID); // 打印fakeID
-			
+
 			proxyIP = env.PROXYIP || proxyIP;
 			proxyIPs = await ADD(proxyIP);
 			proxyIP = proxyIPs[Math.floor(Math.random() * proxyIPs.length)];
@@ -94,11 +94,11 @@ export default {
 			// 对socks5s中每一项进行处理
 			socks5s = socks5s.map(addr => addr.split('//')[1] || addr);
 			socks5Address = socks5s[Math.floor(Math.random() * socks5s.length)];
-			
+
 			if (env.CFPORTS) httpsPorts = await ADD(env.CFPORTS);
 			sub = env.SUB || sub;
 			subconverter = env.SUBAPI || subconverter;
-			if( subconverter.includes("http://") ){
+			if (subconverter.includes("http://")) {
 				subconverter = subconverter.split("//")[1];
 				subProtocol = 'http';
 			} else {
@@ -111,7 +111,7 @@ export default {
 					RproxyIP = env.RPROXYIP || 'false';
 					enableSocks = true;
 				} catch (err) {
-  					/** @type {Error} */ 
+					/** @type {Error} */
 					let e = err;
 					console.log(e.toString());
 					RproxyIP = env.RPROXYIP || !proxyIP ? 'true' : 'false';
@@ -125,8 +125,8 @@ export default {
 			if (env.ADDCSV) addressescsv = await ADD(env.ADDCSV);
 			DLS = env.DLS || DLS;
 			BotToken = env.TGTOKEN || BotToken;
-			ChatID = env.TGID || ChatID; 
-			if(env.GO2SOCKS5) go2Socks5s = await ADD(env.GO2SOCKS5);
+			ChatID = env.TGID || ChatID;
+			if (env.GO2SOCKS5) go2Socks5s = await ADD(env.GO2SOCKS5);
 			const upgradeHeader = request.headers.get("Upgrade");
 			const url = new URL(request.url);
 			if (url.searchParams.has('sub') && url.searchParams.get('sub') !== '') sub = url.searchParams.get('sub');
@@ -134,76 +134,76 @@ export default {
 			if (!upgradeHeader || upgradeHeader !== "websocket") {
 				//const url = new URL(request.url);
 				switch (url.pathname) {
-				case '/':
-					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await proxyURL(env.URL, url);
-					else return new Response(JSON.stringify(request.cf, null, 4), {
-						status: 200,
-						headers: {
-							'content-type': 'application/json',
-						},
-					});
-				case `/${fakeUserID}`:
-					const fakeConfig = await getTrojanConfig(password, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url);
-					return new Response(`${fakeConfig}`, { status: 200 });
-				case '/clear':
-					const keys = await EPEIUS_KV.list();
-					for (const key of keys.keys) {
-						await EPEIUS_KV.delete(key.name);
-					}
-					return new Response('清除成功', { status: 200 });
-				case `/${password}`:
-					await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
-					const trojanConfig = await getTrojanConfig(password, request.headers.get('Host'), sub, UA, RproxyIP, url);
-					const now = Date.now();
-					//const timestamp = Math.floor(now / 1000);
-					const today = new Date(now);
-					today.setHours(0, 0, 0, 0);
-					const UD = Math.floor(((now - today.getTime())/86400000) * 24 * 1099511627776 / 2);
-					let pagesSum = UD;
-					let workersSum = UD;
-					let total = 24 * 1099511627776 ;
-					if (env.CFEMAIL && env.CFKEY){
-						const email = env.CFEMAIL;
-						const key = env.CFKEY;
-						const accountIndex = env.CFID || 0;
-						const accountId = await getAccountId(email, key);
-						if (accountId){
-							const now = new Date()
-							now.setUTCHours(0, 0, 0, 0)
-							const startDate = now.toISOString()
-							const endDate = new Date().toISOString();
-							const Sum = await getSum(accountId, accountIndex, email, key, startDate, endDate);
-							pagesSum = Sum[0];
-							workersSum = Sum[1];
-							total = 102400 ;
+					case '/':
+						if (env.URL302) return Response.redirect(env.URL302, 302);
+						else if (env.URL) return await proxyURL(env.URL, url);
+						else return new Response(JSON.stringify(request.cf, null, 4), {
+							status: 200,
+							headers: {
+								'content-type': 'application/json',
+							},
+						});
+					case `/${fakeUserID}`:
+						const fakeConfig = await getTrojanConfig(password, request.headers.get('Host'), sub, 'CF-Workers-SUB', RproxyIP, url);
+						return new Response(`${fakeConfig}`, { status: 200 });
+					case '/clear':
+						const keys = await EPEIUS_KV.list();
+						for (const key of keys.keys) {
+							await EPEIUS_KV.delete(key.name);
 						}
-					}
-					//console.log(`pagesSum: ${pagesSum}\nworkersSum: ${workersSum}\ntotal: ${total}`);
-					if (userAgent && (userAgent.includes('mozilla') || userAgent.includes('subconverter'))){
-						return new Response(`${trojanConfig}`, {
-							status: 200,
-							headers: {
-								"Content-Type": "text/plain;charset=utf-8",
-								"Profile-Update-Interval": "6",
-								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+						return new Response('清除成功', { status: 200 });
+					case `/${password}`:
+						await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${UA}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
+						const trojanConfig = await getTrojanConfig(password, request.headers.get('Host'), sub, UA, RproxyIP, url);
+						const now = Date.now();
+						//const timestamp = Math.floor(now / 1000);
+						const today = new Date(now);
+						today.setHours(0, 0, 0, 0);
+						const UD = Math.floor(((now - today.getTime()) / 86400000) * 24 * 1099511627776 / 2);
+						let pagesSum = UD;
+						let workersSum = UD;
+						let total = 24 * 1099511627776;
+						if (env.CFEMAIL && env.CFKEY) {
+							const email = env.CFEMAIL;
+							const key = env.CFKEY;
+							const accountIndex = env.CFID || 0;
+							const accountId = await getAccountId(email, key);
+							if (accountId) {
+								const now = new Date()
+								now.setUTCHours(0, 0, 0, 0)
+								const startDate = now.toISOString()
+								const endDate = new Date().toISOString();
+								const Sum = await getSum(accountId, accountIndex, email, key, startDate, endDate);
+								pagesSum = Sum[0];
+								workersSum = Sum[1];
+								total = 102400;
 							}
-						});
-					} else {
-						return new Response(`${trojanConfig}`, {
-							status: 200,
-							headers: {
-								"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
-								"Content-Type": "text/plain;charset=utf-8",
-								"Profile-Update-Interval": "6",
-								"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
-							}
-						});
-					}
-				default:
-					if (env.URL302) return Response.redirect(env.URL302, 302);
-					else if (env.URL) return await proxyURL(env.URL, url);
-					else return new Response('不用怀疑！你PASSWORD就是错的！！！', { status: 404 });
+						}
+						//console.log(`pagesSum: ${pagesSum}\nworkersSum: ${workersSum}\ntotal: ${total}`);
+						if (userAgent && (userAgent.includes('mozilla') || userAgent.includes('subconverter'))) {
+							return new Response(`${trojanConfig}`, {
+								status: 200,
+								headers: {
+									"Content-Type": "text/plain;charset=utf-8",
+									"Profile-Update-Interval": "6",
+									"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+								}
+							});
+						} else {
+							return new Response(`${trojanConfig}`, {
+								status: 200,
+								headers: {
+									"Content-Disposition": `attachment; filename=${FileName}; filename*=utf-8''${encodeURIComponent(FileName)}`,
+									"Content-Type": "text/plain;charset=utf-8",
+									"Profile-Update-Interval": "6",
+									"Subscription-Userinfo": `upload=${pagesSum}; download=${workersSum}; total=${total}; expire=${expire}`,
+								}
+							});
+						}
+					default:
+						if (env.URL302) return Response.redirect(env.URL302, 302);
+						else if (env.URL) return await proxyURL(env.URL, url);
+						else return new Response('不用怀疑！你PASSWORD就是错的！！！', { status: 404 });
 				}
 			} else {
 				proxyIP = url.searchParams.get('proxyip') || proxyIP;
@@ -214,7 +214,7 @@ export default {
 				if (new RegExp('/socks5=', 'i').test(url.pathname)) socks5Address = url.pathname.split('5=')[1];
 				else if (new RegExp('/socks://', 'i').test(url.pathname) || new RegExp('/socks5://', 'i').test(url.pathname)) {
 					socks5Address = url.pathname.split('://')[1].split('#')[0];
-					if (socks5Address.includes('@')){
+					if (socks5Address.includes('@')) {
 						let userPassword = socks5Address.split('@')[0];
 						const base64Regex = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i;
 						if (base64Regex.test(userPassword) && !userPassword.includes(':')) userPassword = atob(userPassword);
@@ -226,7 +226,7 @@ export default {
 						parsedSocks5Address = socks5AddressParser(socks5Address);
 						enableSocks = true;
 					} catch (err) {
-						/** @type {Error} */ 
+						/** @type {Error} */
 						let e = err;
 						console.log(e.toString());
 						enableSocks = false;
@@ -258,7 +258,7 @@ async function trojanOverWSHandler(request) {
 		value: null
 	};
 	let udpStreamWrite = null;
-	readableWebSocketStream.pipeTo(new WritableStream({
+	await readableWebSocketStream.pipeTo(new WritableStream({
 		async write(chunk, controller) {
 			if (udpStreamWrite) {
 				return udpStreamWrite(chunk);
@@ -283,7 +283,7 @@ async function trojanOverWSHandler(request) {
 				throw new Error(message);
 				return;
 			}
-			handleTCPOutBound(remoteSocketWapper, addressRemote, portRemote, rawClientData, webSocket, log, addressType);
+			await handleTCPOutBound(remoteSocketWapper, addressRemote, portRemote, rawClientData, webSocket, log, addressType);
 		},
 		close() {
 			log(`readableWebSocketStream is closed`);
@@ -348,35 +348,35 @@ async function parseTrojanHeader(buffer) {
 	let addressIndex = 2;
 	let address = "";
 	switch (atype) {
-	case 1:
-		addressLength = 4;
-		address = new Uint8Array(
-			socks5DataBuffer.slice(addressIndex, addressIndex + addressLength)
-		).join(".");
-		break;
-	case 3:
-		addressLength = new Uint8Array(
-			socks5DataBuffer.slice(addressIndex, addressIndex + 1)
-		)[0];
-		addressIndex += 1;
-		address = new TextDecoder().decode(
-			socks5DataBuffer.slice(addressIndex, addressIndex + addressLength)
-		);
-		break;
-	case 4:
-		addressLength = 16;
-		const dataView = new DataView(socks5DataBuffer.slice(addressIndex, addressIndex + addressLength));
-		const ipv6 = [];
-		for (let i = 0; i < 8; i++) {
-			ipv6.push(dataView.getUint16(i * 2).toString(16));
-		}
-		address = ipv6.join(":");
-		break;
-	default:
-		return {
-			hasError: true,
-			message: `invalid addressType is ${atype}`
-		};
+		case 1:
+			addressLength = 4;
+			address = new Uint8Array(
+				socks5DataBuffer.slice(addressIndex, addressIndex + addressLength)
+			).join(".");
+			break;
+		case 3:
+			addressLength = new Uint8Array(
+				socks5DataBuffer.slice(addressIndex, addressIndex + 1)
+			)[0];
+			addressIndex += 1;
+			address = new TextDecoder().decode(
+				socks5DataBuffer.slice(addressIndex, addressIndex + addressLength)
+			);
+			break;
+		case 4:
+			addressLength = 16;
+			const dataView = new DataView(socks5DataBuffer.slice(addressIndex, addressIndex + addressLength));
+			const ipv6 = [];
+			for (let i = 0; i < 8; i++) {
+				ipv6.push(dataView.getUint16(i * 2).toString(16));
+			}
+			address = ipv6.join(":");
+			break;
+		default:
+			return {
+				hasError: true,
+				message: `invalid addressType is ${atype}`
+			};
 	}
 
 	if (!address) {
@@ -410,160 +410,223 @@ async function parseTrojanHeader(buffer) {
  * @param {number} addressType - 地址类型（1: IPv4, 3: 域名, 4: IPv6）
  */
 async function handleTCPOutBound(remoteSocket, addressRemote, portRemote, rawClientData, webSocket, log, addressType) {
-    let storedSocks5Address = null; // 存储从KV中读取的socks5地址
+	console.log(`[Line 12] handleTCPOutBound开始执行: addressRemote=${addressRemote}, portRemote=${portRemote}, addressType=${addressType}, proxyAddress=未设置`);
 
-    /**
-     * 判断是否使用Socks5模式的辅助函数
-     *
-     * @param {string} address - 需要检查的地址
-     * @returns {boolean} - 是否使用Socks5模式
-     */
-    async function useSocks5Pattern(address) {
-        // 首先检查 KV 中是否已存储该地址的 socks5 配置
-        try {
-            storedSocks5Address = await EPEIUS_KV.get(address);
-            if (storedSocks5Address) {
-                // 检查KV中存储的socks5地址是否在socks5s列表中
-                if (!socks5s.includes(storedSocks5Address)) {
-                    // 如果不在列表中，删除该KV值
-                    //await EPEIUS_KV.delete(address);
-                    //console.log(`已删除无效的Socks5配置: ${address} -> ${storedSocks5Address}`);
-                    storedSocks5Address = null;
-                } else {
-                    return true;
-                }
-            }
-        } catch (error) {
-            console.log(`KV读取错误: ${error}`);
-        }
+	// 初始化代理相关的变量
+	let currentSocks5Index = -1;  // 当前使用的socks5代理索引,初始为-1表示未开始使用代理
+	let kvProxy = 'NOTSET';  // 存储从KV数据库中读取的代理地址
+	let proxyAddress = null;
+	let tcpSocket = null; // 声明tcpSocket变量到函数作用域
 
-        // 如果 KV 中没有有效值，则按原有逻辑判断
-        if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) return true;
-        
-        // 遍历所有socks5模式，使用正则表达式进行匹配
-        return go2Socks5s.some(pattern => {
-            let regexPattern = pattern.replace(/\*/g, '.*'); // 将通配符*替换为.*
-            let regex = new RegExp(`^${regexPattern}$`, 'i'); // 创建不区分大小写的正则表达式
-            return regex.test(address); // 测试地址是否匹配当前模式
-        });
-    }
+	/**
+	 * 获取代理地址的辅助函数
+	 * 该函数通过多种方式尝试获取合适的代理地址:
+	 * 1. 首先从KV数据库获取指定地址的代理配置
+	 * 2. 如果KV中没有,则检查地址是否匹配go2socks5s中的规则
+	 * 3. 如果匹配规则,则从socks5s列表中依次获取代理地址
+	 * 
+	 * @param {string} address - 需要检查的目标地址
+	 * @returns {string|null} - 返回代理地址,如果是'DIRECT'表示直连,null表示没有可用代理
+	 */
+	async function getProxyAddress(address) {
+		console.log(`[Line 24] getProxyAddress开始执行: address=${address}, currentSocks5Index=${currentSocks5Index}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+		const globalGo2Socks5s = go2Socks5s;
 
-    /**
-     * 连接到目标地址并写入数据的辅助函数
-     *
-     * @param {string} address - 目标地址
-     * @param {number} port - 目标端口
-     * @param {boolean} socks - 是否使用Socks5代理
-     * @returns {object} - 返回连接的tcpSocket对象
-     */
-    async function connectAndWrite(address, port, socks = false) {
-        log(`已连接到 ${address}:${port}`);
-        
-        let tcpSocket = null;
-        
-        if (socks) {
-            // 如果有存储的代理地址，先尝试使用它
-            if (storedSocks5Address) {
-                try {
-                    tcpSocket = await socks5Connect(addressType, address, port, storedSocks5Address, log);
-                } catch (error) {
-                    console.log(`使用存储的代理地址连接失败: ${error}`);
-                    tcpSocket = null;
-                }
-            }
-            
-            // 如果存储的代理连接失败或没有存储的代理，则依次尝试其他代理
-            if (!tcpSocket) {
-                for (const socks5Addr of socks5s) {
-                    if (socks5Addr === storedSocks5Address) continue; // 跳过已尝试过的代理
-                    try {
-                        tcpSocket = await socks5Connect(addressType, address, port, socks5Addr, log);
-                        if (tcpSocket) {
-                            // 连接成功，更新KV存储
-                            try {
-                                await EPEIUS_KV.put(address, socks5Addr, {expirationTtl: 86400});
-                                console.log(`已将Socks5配置存储到KV: ${address} -> ${socks5Addr}`);
-                            } catch (error) {
-                                console.log(`KV写入错误: ${error}`);
-                            }
-                            break;
-                        }
-                    } catch (error) {
-                        console.log(`尝试代理 ${socks5Addr} 连接失败: ${error}`);
-                        continue;
-                    }
-                }
-            }
-            
-            if (!tcpSocket) {
-                throw new Error('所有Socks5代理连接均失败');
-            }
-        } else {
-            tcpSocket = connect({ // 直接连接
-                hostname: address,
-                port
-            });
-        }
+		// 第一次调用时尝试从KV数据库获取代理配置
+		if (kvProxy === 'NOTSET') {
+			try {
+				kvProxy = await EPEIUS_KV.get(address) || 'NOKV';
+				console.log(`[Line 30] 从KV获取代理结果: kvProxy=${kvProxy}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+				log(`从KV获取到代理地址: ${kvProxy}`);
+				if (kvProxy !== 'NOKV') {
+					return kvProxy;
+				}
+			} catch (error) {
+				console.log(`[Line 36] KV读取错误: ${error}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+				kvProxy = 'NOKV';
+			}
+		}
 
-        remoteSocket.value = tcpSocket; // 将tcpSocket赋值给remoteSocket
-        const writer = tcpSocket.writable.getWriter(); // 获取tcpSocket的可写流
-        await writer.write(rawClientData); // 写入原始客户端数据
-        writer.releaseLock(); // 释放锁
-        return tcpSocket; // 返回tcpSocket对象
-    }
+		// 首次进入时检查是否需要使用代理
+		if (currentSocks5Index === -1 && kvProxy === 'NOKV') {
+			// 检查address是否匹配go2socks5s中的任一规则
+			const matchedPattern = globalGo2Socks5s.some(pattern => {
+				let regexPattern = pattern.replace(/\*/g, '.*');
+				let regex = new RegExp(`^${regexPattern}$`, 'i');
+				return regex.test(address);
+			});
+			console.log(`[Line 48] 地址匹配结果: matchedPattern=${matchedPattern}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
 
-    /**
-     * 重新尝试连接的辅助函数
-     */
-    async function retry() {
-        if (enableSocks) {
-            // 如果启用了Socks5，尝试使用Socks5连接
-            tcpSocket = await connectAndWrite(addressRemote, portRemote, true);
-        } else {
-            // 否则，处理代理IP的逻辑
-            if (!proxyIP || proxyIP === '') {
-                proxyIP = atob('cHJveHlpcC50cDEuY21saXVzc3NzLmNvbQ=='); // 解码默认的代理IP
-            } else if (proxyIP.includes(']:')) {
-                // 如果proxyIP包含']:'，则分离IP和端口
-                portRemote = proxyIP.split(']:')[1] || portRemote;
-                proxyIP = proxyIP.split(']:')[0] || proxyIP;
-            } else if (proxyIP.split(':').length === 2) {
-                // 如果proxyIP格式为'IP:Port'，则分离IP和端口
-                portRemote = proxyIP.split(':')[1] || portRemote;
-                proxyIP = proxyIP.split(':')[0] || proxyIP;
-            }
-            if (proxyIP.includes('.tp')) {
-                // 如果proxyIP包含'.tp'，进一步提取端口
-                portRemote = proxyIP.split('.tp')[1].split('.')[0] || portRemote;
-            }
-            // 尝试连接到代理IP或addressRemote
-            tcpSocket = await connectAndWrite(proxyIP || addressRemote, portRemote);
-        }
+			if (!matchedPattern) {
+				log(`地址 ${address} 将直接连接，不使用代理`);
+				kvProxy = 'DIRECT';
+			}
 
-        // 监听tcpSocket关闭事件，处理错误
-        tcpSocket.closed.catch((error) => {
-            console.log("重试时tcpSocket关闭错误", error);
-        }).finally(() => {
-            safeCloseWebSocket(webSocket); // 关闭WebSocket连接
-        });
+			// 如果socks5s为空,直接返回DIRECT
+			if (!socks5s || socks5s.length === 0) {
+				console.log(`[Line 57] socks5s为空或长度为0, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+				log(`没有可用的代理服务器，将直接连接`);
+				kvProxy = 'DIRECT';
+			}
+		}
 
-        // 将远程tcpSocket连接到WebSocket
-        remoteSocketToWS(tcpSocket, webSocket, null, log);
-    }
+		if (kvProxy === 'DIRECT') {
+			kvProxy = 'PROXY'
+			return 'DIRECT';
+		}
 
-    let useSocks = false;
-    // 如果配置了Socks5模式且启用了Socks5代理，则判断是否使用Socks5
-    if (go2Socks5s.length > 0 && enableSocks) {
-        useSocks = await useSocks5Pattern(addressRemote);
-    }
+		// 移动到下一个代理地址
+		currentSocks5Index++;
 
-    // 连接到目标地址并写入数据
-    let tcpSocket = await connectAndWrite(addressRemote, portRemote, useSocks);
-    
-    // 将tcpSocket连接到WebSocket，并传入retry函数以便在需要时重试
-    remoteSocketToWS(tcpSocket, webSocket, retry, log);
+		// 如果已尝试完所有代理,返回null
+		if (currentSocks5Index >= socks5s.length) {
+			console.log(`[Line 64] 已尝试所有代理: currentSocks5Index=${currentSocks5Index}, socks5s.length=${socks5s.length}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+			return null;
+		}
+
+		// 从代理列表中获取当前索引对应的代理地址
+		const selectedProxy = socks5s[currentSocks5Index];
+		log(`从socks5s列表获取代理地址: ${selectedProxy}`);
+		kvProxy = selectedProxy;
+
+		console.log(`[Line 75] getProxyAddress返回结果: returnValue=${kvProxy}, 新的currentSocks5Index=${currentSocks5Index}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+		return kvProxy;
+	}
+
+	/**
+	 * 连接到目标地址并写入数据的辅助函数
+	 *
+	 * @param {string} address - 目标地址
+	 * @param {number} port - 目标端口
+	 * @param {string} proxy - 代理地址，默认为'DIRECT'
+	 * @returns {object|null} - 返回连接的tcpSocket对象，失败返回null
+	 */
+	async function connectAndWrite(address, port, proxy = 'DIRECT') {
+		console.log(`[Line 83] connectAndWrite开始执行: address=${address}, port=${port}, proxy=${proxy}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+		log(`尝试连接到 ${address}:${port} ${proxy === 'DIRECT' ? '直接连接' : `通过代理 ${proxy}`}`);
+
+		let tcpSocket = null;
+
+		try {
+			if (proxy === 'DIRECT') {
+				tcpSocket = connect({
+					hostname: address,
+					port
+				});
+			} else {
+				tcpSocket = await socks5Connect(addressType, address, port, proxy, log);
+			}
+
+		} catch (error) {
+			console.log(`[Line 110] 连接失败: ${error.message || error}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+			return null;
+		}
+
+		remoteSocket.value = tcpSocket;
+		const writer = tcpSocket.writable.getWriter();
+		await writer.write(rawClientData);
+		writer.releaseLock();
+		console.log(`[Line 106] 连接成功并写入数据完成, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+		return tcpSocket;
+	}
+
+	/**
+	 * 重新尝试连接的辅助函数
+	 * @throws {Error} 当所有代理都尝试失败时抛出错误
+	 */
+	async function transferData() {
+
+		proxyAddress = await getProxyAddress(addressRemote);
+		console.log(`[Line 125] transferData开始执行, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+
+		if (!proxyAddress) {
+			//throw new Error('所有Socks5代理连接均失败');
+			return;
+		}
+
+		tcpSocket = await connectAndWrite(addressRemote, portRemote, proxyAddress);
+
+		if (!tcpSocket) {
+			//return;
+			transferData();
+		}
+
+		// 监听tcpSocket关闭事件
+		tcpSocket.closed.catch((error) => {
+			console.log(`[Line 143] tcpSocket关闭错误: ${error}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+		}).finally(() => {
+			safeCloseWebSocket(webSocket);
+		});
+
+		// 将远程tcpSocket连接到WebSocket
+		remoteSocketToWS(tcpSocket, webSocket, transferData, log);
+	}
+
+	async function remoteSocketToWS(remoteSocket, webSocket, retry, log) {
+		console.log(`[Line 159] remoteSocketToWS开始执行, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+		let hasIncomingData = false;
+
+		try {
+			await remoteSocket.readable.pipeTo(
+				new WritableStream({
+					start() { },
+					/**
+					 *
+					 * @param {Uint8Array} chunk
+					 * @param {*} controller
+					 */
+					async write(chunk, controller) {
+						try {
+							hasIncomingData = true;
+							console.log(`[Line 166] 收到数据: chunk.length=${chunk.length}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+							if (webSocket.readyState !== WS_READY_STATE_OPEN) {
+								controller.error(
+									"webSocket connection is not open"
+								);
+							}
+							webSocket.send(chunk);
+						} catch (err) {
+							console.error(`[Line 166] write chunk error: ${err.stack || err}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+							controller.error(err);
+						}
+					},
+					close() {
+						console.log(`remoteSocket.readable is closed, hasIncomingData: ${hasIncomingData}`);
+					},
+					abort(reason) {
+						console.error(`[Line 178] remoteSocket.readable abort: ${reason}, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+					}
+				})
+			);
+		} catch (error) {
+			console.error(
+				`[Line 183] remoteSocketToWS error:`,
+				error.stack || error,
+				`addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`
+			);
+			safeCloseWebSocket(webSocket);
+		}
+
+		if (hasIncomingData === true) {
+			console.log(`[Line 198] 收到数据, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+
+			if (proxyAddress !== 'DIRECT') {
+				try {
+					await EPEIUS_KV.put(addressRemote, proxyAddress);
+					console.log(`[Line 193] 成功保存代理地址到KV: ${addressRemote}:${proxyAddress}`);
+				} catch (error) {
+					console.error(`[Line 196] 保存代理地址到KV失败:`, error, `addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+				}
+			}
+		} else if (retry) {
+			console.log(`[Line 200] 没有收到数据，准备重试, addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+			retry();
+		}
+	}
+
+	console.log(`[Line 206] 开始执行transferData(), addressRemote=${addressRemote}, proxyAddress=${proxyAddress}`);
+	transferData();
 }
-
 
 function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
 	let readableStreamCancel = false;
@@ -594,7 +657,7 @@ function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
 				controller.enqueue(earlyData);
 			}
 		},
-		pull(controller) {},
+		pull(controller) { },
 		cancel(reason) {
 			if (readableStreamCancel) {
 				return;
@@ -607,44 +670,6 @@ function makeReadableWebSocketStream(webSocketServer, earlyDataHeader, log) {
 	return stream;
 }
 
-async function remoteSocketToWS(remoteSocket, webSocket, retry, log) {
-	let hasIncomingData = false;
-	await remoteSocket.readable.pipeTo(
-		new WritableStream({
-			start() {},
-			/**
-			 *
-			 * @param {Uint8Array} chunk
-			 * @param {*} controller
-			 */
-			async write(chunk, controller) {
-				hasIncomingData = true;
-				if (webSocket.readyState !== WS_READY_STATE_OPEN) {
-					controller.error(
-						"webSocket connection is not open"
-					);
-				}
-				webSocket.send(chunk);
-			},
-			close() {
-				log(`remoteSocket.readable is closed, hasIncomingData: ${hasIncomingData}`);
-			},
-			abort(reason) {
-				console.error("remoteSocket.readable abort", reason);
-			}
-		})
-	).catch((error) => {
-		console.error(
-			`remoteSocketToWS error:`,
-			error.stack || error
-		);
-		safeCloseWebSocket(webSocket);
-	});
-	if (hasIncomingData === false && retry) {
-		log(`retry`);
-		retry();
-	}
-}
 /*
 function isValidSHA224(hash) {
 	const sha224Regex = /^[0-9a-f]{56}$/i;
@@ -697,7 +722,7 @@ function revertFakeInfo(content, userID, hostName, isBase64) {
 
 async function MD5MD5(text) {
 	const encoder = new TextEncoder();
-  
+
 	const firstPass = await crypto.subtle.digest('MD5', encoder.encode(text));
 	const firstPassArray = Array.from(new Uint8Array(firstPass));
 	const firstHex = firstPassArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -705,7 +730,7 @@ async function MD5MD5(text) {
 	const secondPass = await crypto.subtle.digest('MD5', encoder.encode(firstHex.slice(7, 27)));
 	const secondPassArray = Array.from(new Uint8Array(secondPass));
 	const secondHex = secondPassArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  
+
 	return secondHex.toLowerCase();
 }
 
@@ -713,10 +738,10 @@ async function ADD(envadd) {
 	var addtext = envadd.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',');  // 双引号、单引号和换行符替换为逗号
 	//console.log(addtext);
 	if (addtext.charAt(0) == ',') addtext = addtext.slice(1);
-	if (addtext.charAt(addtext.length -1) == ',') addtext = addtext.slice(0, addtext.length - 1);
+	if (addtext.charAt(addtext.length - 1) == ',') addtext = addtext.slice(0, addtext.length - 1);
 	const add = addtext.split(',');
 	//console.log(add);
-	return add ;
+	return add;
 }
 
 async function proxyURL(proxyURL, url) {
@@ -753,7 +778,7 @@ async function proxyURL(proxyURL, url) {
 }
 
 function checkSUB(host) {
-	if ((!sub || sub == '') && (addresses.length + addressesapi.length + addressescsv.length) == 0){
+	if ((!sub || sub == '') && (addresses.length + addressesapi.length + addressescsv.length) == 0) {
 		addresses = [
 			'Join.my.Telegram.channel.CMLiussss.to.unlock.more.premium.nodes.cf.090227.xyz#加入我的频道t.me/CMLiussss解锁更多优选节点',
 			'127.0.0.1:1234#CFnat',
@@ -778,57 +803,57 @@ function checkSUB(host) {
 function 配置信息(密码, 域名地址) {
 	const 啥啥啥_写的这是啥啊 = 'dHJvamFu';
 	const 协议类型 = atob(啥啥啥_写的这是啥啊);
-	
+
 	const 别名 = FileName;
 	let 地址 = 域名地址;
 	let 端口 = 443;
-	
+
 	const 传输层协议 = 'ws';
 	const 伪装域名 = 域名地址;
 	const 路径 = '/?ed=2560';
-	
-	let 传输层安全 = ['tls',true];
+
+	let 传输层安全 = ['tls', true];
 	const SNI = 域名地址;
 	const 指纹 = 'randomized';
-	
-	const v2ray = `${协议类型}://${encodeURIComponent(密码)}@${地址}:${端口}?security=${传输层安全[0]}&sni=${SNI}&alpn=h3&fp=${指纹}&allowInsecure=1&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`              
+
+	const v2ray = `${协议类型}://${encodeURIComponent(密码)}@${地址}:${端口}?security=${传输层安全[0]}&sni=${SNI}&alpn=h3&fp=${指纹}&allowInsecure=1&type=${传输层协议}&host=${伪装域名}&path=${encodeURIComponent(路径)}#${encodeURIComponent(别名)}`
 	const clash = `- {name: ${别名}, server: ${地址}, port: ${端口}, udp: false, client-fingerprint: ${指纹}, type: ${协议类型}, password: ${密码}, sni: ${SNI}, alpn: [h3], skip-cert-verify: true, network: ${传输层协议}, ws-opts: {path: "${路径}", headers: {Host: ${伪装域名}}}}`;
 
-	return [v2ray,clash];
+	return [v2ray, clash];
 }
 
-let subParams = ['sub','base64','b64','clash','singbox','sb','surge'];
+let subParams = ['sub', 'base64', 'b64', 'clash', 'singbox', 'sb', 'surge'];
 async function getTrojanConfig(password, hostName, sub, UA, RproxyIP, _url) {
 	checkSUB(hostName);
 	const userAgent = UA.toLowerCase();
-	const Config = 配置信息(password , hostName);
+	const Config = 配置信息(password, hostName);
 	const v2ray = Config[0];
 	const clash = Config[1];
 	let proxyhost = "";
-	if(hostName.includes(".workers.dev") || hostName.includes(".pages.dev")){
-		if ( proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
+	if (hostName.includes(".workers.dev") || hostName.includes(".pages.dev")) {
+		if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
 			try {
-				const response = await fetch(proxyhostsURL); 
-			
+				const response = await fetch(proxyhostsURL);
+
 				if (!response.ok) {
 					console.error('获取地址时出错:', response.status, response.statusText);
 					return; // 如果有错误，直接返回
 				}
-			
+
 				const text = await response.text();
 				const lines = text.split('\n');
 				// 过滤掉空行或只包含空白字符的行
 				const nonEmptyLines = lines.filter(line => line.trim() !== '');
-			
+
 				proxyhosts = proxyhosts.concat(nonEmptyLines);
 			} catch (error) {
 				//console.error('获取地址时出错:', error);
 			}
-		} 
+		}
 		if (proxyhosts.length != 0) proxyhost = proxyhosts[Math.floor(Math.random() * proxyhosts.length)] + "/";
 	}
-	
-	if ( userAgent.includes('mozilla') && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
+
+	if (userAgent.includes('mozilla') && !subParams.some(_searchParams => _url.searchParams.has(_searchParams))) {
 		let surge = `Surge订阅地址:\nhttps://${proxyhost}${hostName}/${password}?surge`;
 		if (hostName.includes(".workers.dev") || hostName.includes(".pages.dev")) surge = "Surge订阅必须绑定自定义域";
 		const newSocks5s = socks5s.map(socks5Address => {
@@ -838,9 +863,9 @@ async function getTrojanConfig(password, hostName, sub, UA, RproxyIP, _url) {
 		});
 
 		let socks5List = '';
-		if( go2Socks5s.length > 0 && enableSocks ) {
+		if (go2Socks5s.length > 0 && enableSocks) {
 			socks5List = `${decodeURIComponent('SOCKS5%EF%BC%88%E7%99%BD%E5%90%8D%E5%8D%95%EF%BC%89%3A%20')}`;
-			if ( go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg==')) ) socks5List += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}\n`;
+			if (go2Socks5s.includes(atob('YWxsIGlu')) || go2Socks5s.includes(atob('Kg=='))) socks5List += `${decodeURIComponent('%E6%89%80%E6%9C%89%E6%B5%81%E9%87%8F')}\n`;
 			else socks5List += `\n  ${go2Socks5s.join('\n  ')}\n`;
 		}
 
@@ -919,7 +944,7 @@ https://github.com/cmliu/epeius
 			return 'Error: fetch is not available in this environment.';
 		}
 		// 如果是使用默认域名，则改成一个workers的域名，订阅器会加上代理
-		if (hostName.includes(".workers.dev") || hostName.includes(".pages.dev")){
+		if (hostName.includes(".workers.dev") || hostName.includes(".pages.dev")) {
 			fakeHostName = `${fakeHostName}.workers.dev`;
 		} else {
 			fakeHostName = `${fakeHostName}.xyz`
@@ -931,21 +956,21 @@ https://github.com/cmliu/epeius
 		let newAddressescsv = [];
 
 		if (!sub || sub == "") {
-			if(hostName.includes('workers.dev') || hostName.includes('pages.dev')) {
+			if (hostName.includes('workers.dev') || hostName.includes('pages.dev')) {
 				if (proxyhostsURL && (!proxyhosts || proxyhosts.length == 0)) {
 					try {
-						const response = await fetch(proxyhostsURL); 
-					
+						const response = await fetch(proxyhostsURL);
+
 						if (!response.ok) {
 							console.error('获取地址时出错:', response.status, response.statusText);
 							return; // 如果有错误，直接返回
 						}
-					
+
 						const text = await response.text();
 						const lines = text.split('\n');
 						// 过滤掉空行或只包含空白字符的行
 						const nonEmptyLines = lines.filter(line => line.trim() !== '');
-					
+
 						proxyhosts = proxyhosts.concat(nonEmptyLines);
 					} catch (error) {
 						console.error('获取地址时出错:', error);
@@ -954,14 +979,14 @@ https://github.com/cmliu/epeius
 				// 使用Set对象去重
 				proxyhosts = [...new Set(proxyhosts)];
 			}
-	
+
 			newAddressesapi = await getAddressesapi(addressesapi);
 			newAddressescsv = await getAddressescsv('TRUE');
 			url = `https://${hostName}/${fakeUserID}`;
-		} 
+		}
 
-		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase())){
-			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || ( _url.searchParams.has('clash'))) {
+		if (!userAgent.includes(('CF-Workers-SUB').toLowerCase())) {
+			if ((userAgent.includes('clash') && !userAgent.includes('nekobox')) || (_url.searchParams.has('clash'))) {
 				url = `${subProtocol}://${subconverter}/sub?target=clash&url=${encodeURIComponent(url)}&insert=false&config=${encodeURIComponent(subconfig)}&emoji=true&list=false&tfo=false&scv=true&fdn=false&sort=false&new_name=true`;
 				isBase64 = false;
 			} else if (userAgent.includes('sing-box') || userAgent.includes('singbox') || _url.searchParams.has('singbox') || _url.searchParams.has('sb')) {
@@ -972,23 +997,24 @@ https://github.com/cmliu/epeius
 				isBase64 = false;
 			}
 		}
-		
+
 		try {
 			let content;
 			if ((!sub || sub == "") && isBase64 == true) {
-				content = await subAddresses(fakeHostName,fakeUserID,userAgent,newAddressesapi,newAddressescsv);
+				content = await subAddresses(fakeHostName, fakeUserID, userAgent, newAddressesapi, newAddressescsv);
 			} else {
-				const response = await fetch(url ,{
+				const response = await fetch(url, {
 					headers: {
 						'User-Agent': `CF-Workers-epeius/cmliu`
-					}});
+					}
+				});
 				content = await response.text();
 			}
 
 			if (_url.pathname == `/${fakeUserID}`) return content;
-			
+
 			content = revertFakeInfo(content, password, hostName, isBase64);
-			if (userAgent.includes('surge') || _url.searchParams.has('surge')) content = surge(content, `https://${hostName}/${password}?surge`);	
+			if (userAgent.includes('surge') || _url.searchParams.has('surge')) content = surge(content, `https://${hostName}/${password}?surge`);
 			return content;
 		} catch (error) {
 			console.error('Error fetching content:', error);
@@ -998,7 +1024,7 @@ https://github.com/cmliu/epeius
 }
 
 async function sendMessage(type, ip, add_data = "") {
-	if ( BotToken !== '' && ChatID !== ''){
+	if (BotToken !== '' && ChatID !== '') {
 		let msg = "";
 		const response = await fetch(`http://ip-api.com/json/${ip}?lang=zh-CN`);
 		if (response.status == 200) {
@@ -1007,8 +1033,8 @@ async function sendMessage(type, ip, add_data = "") {
 		} else {
 			msg = `${type}\nIP: ${ip}\n<tg-spoiler>${add_data}`;
 		}
-	
-		let url = "https://api.telegram.org/bot"+ BotToken +"/sendMessage?chat_id=" + ChatID + "&parse_mode=HTML&text=" + encodeURIComponent(msg);
+
+		let url = "https://api.telegram.org/bot" + BotToken + "/sendMessage?chat_id=" + ChatID + "&parse_mode=HTML&text=" + encodeURIComponent(msg);
 		return fetch(url, {
 			method: 'get',
 			headers: {
@@ -1020,12 +1046,12 @@ async function sendMessage(type, ip, add_data = "") {
 	}
 }
 let proxyIPPool = [];
-function subAddresses(host,pw,userAgent,newAddressesapi,newAddressescsv) {
+function subAddresses(host, pw, userAgent, newAddressesapi, newAddressescsv) {
 	addresses = addresses.concat(newAddressesapi);
 	addresses = addresses.concat(newAddressescsv);
 	// 使用Set对象去重
 	const uniqueAddresses = [...new Set(addresses)];
-				
+
 	const responseBody = uniqueAddresses.map(address => {
 		let port = "-1";
 		let addressid = address;
@@ -1047,7 +1073,7 @@ function subAddresses(host,pw,userAgent,newAddressesapi,newAddressescsv) {
 				address = parts[0];
 				addressid = parts[1];
 			}
-		
+
 			if (addressid.includes(':')) {
 				addressid = addressid.split(':')[0];
 			}
@@ -1057,7 +1083,7 @@ function subAddresses(host,pw,userAgent,newAddressesapi,newAddressescsv) {
 			addressid = match[3] || address;
 		}
 
-		const httpsPorts = ["2053","2083","2087","2096","8443"];
+		const httpsPorts = ["2053", "2083", "2087", "2096", "8443"];
 		if (!isValidIPv4(address) && port == "-1") {
 			for (let httpsPort of httpsPorts) {
 				if (address.includes(httpsPort)) {
@@ -1067,12 +1093,12 @@ function subAddresses(host,pw,userAgent,newAddressesapi,newAddressescsv) {
 			}
 		}
 		if (port == "-1") port = "443";
-		
-		let 伪装域名 = host ;
-		let 最终路径 = '/?ed=2560' ;
+
+		let 伪装域名 = host;
+		let 最终路径 = '/?ed=2560';
 		let 节点备注 = '';
-		
-		if(proxyhosts.length > 0 && (伪装域名.includes('.workers.dev') || 伪装域名.includes('pages.dev'))) {
+
+		if (proxyhosts.length > 0 && (伪装域名.includes('.workers.dev') || 伪装域名.includes('pages.dev'))) {
 			最终路径 = `/${伪装域名}${最终路径}`;
 			伪装域名 = proxyhosts[Math.floor(Math.random() * proxyhosts.length)];
 			节点备注 = ` 已启用临时域名中转服务，请尽快绑定自定义域！`;
@@ -1110,7 +1136,7 @@ async function getAddressesapi(api) {
 		// 使用Promise.allSettled等待所有API请求完成，无论成功或失败
 		// 对api数组进行遍历，对每个API地址发起fetch请求
 		const responses = await Promise.allSettled(api.map(apiUrl => fetch(apiUrl, {
-			method: 'get', 
+			method: 'get',
 			headers: {
 				'Accept': 'text/html,application/xhtml+xml,application/xml;',
 				'User-Agent': 'CF-Workers-epeius/cmliu'
@@ -1162,39 +1188,39 @@ async function getAddressescsv(tls) {
 	if (!addressescsv || addressescsv.length === 0) {
 		return [];
 	}
-	
+
 	let newAddressescsv = [];
-	
+
 	for (const csvUrl of addressescsv) {
 		try {
 			const response = await fetch(csvUrl);
-		
+
 			if (!response.ok) {
 				console.error('获取CSV地址时出错:', response.status, response.statusText);
 				continue;
 			}
-		
+
 			const text = await response.text();// 使用正确的字符编码解析文本内容
 			let lines;
-			if (text.includes('\r\n')){
+			if (text.includes('\r\n')) {
 				lines = text.split('\r\n');
 			} else {
 				lines = text.split('\n');
 			}
-		
+
 			// 检查CSV头部是否包含必需字段
 			const header = lines[0].split(',');
 			const tlsIndex = header.indexOf('TLS');
-			
+
 			const ipAddressIndex = 0;// IP地址在 CSV 头部的位置
 			const portIndex = 1;// 端口在 CSV 头部的位置
 			const dataCenterIndex = tlsIndex + 1; // 数据中心是 TLS 的后一个字段
-		
+
 			if (tlsIndex === -1) {
 				console.error('CSV文件缺少必需的字段');
 				continue;
 			}
-		
+
 			// 从第二行开始遍历CSV行
 			for (let i = 1; i < lines.length; i++) {
 				const columns = lines[i].split(',');
@@ -1204,7 +1230,7 @@ async function getAddressescsv(tls) {
 					const ipAddress = columns[ipAddressIndex];
 					const port = columns[portIndex];
 					const dataCenter = columns[dataCenterIndex];
-			
+
 					const formattedAddress = `${ipAddress}:${port}#${dataCenter}`;
 					newAddressescsv.push(formattedAddress);
 					if (csvUrl.includes('proxyip=true') && columns[tlsIndex].toUpperCase() == 'true' && !httpsPorts.includes(port)) {
@@ -1218,13 +1244,13 @@ async function getAddressescsv(tls) {
 			continue;
 		}
 	}
-	
+
 	return newAddressescsv;
 }
 
 function surge(content, url) {
 	let 每行内容;
-	if (content.includes('\r\n')){
+	if (content.includes('\r\n')) {
 		每行内容 = content.split('\r\n');
 	} else {
 		每行内容 = content.split('\n');
@@ -1257,19 +1283,19 @@ function surge(content, url) {
 /*jslint bitwise: true */
 (function () {
 	'use strict';
-  
+
 	var ERROR = 'input is invalid type';
 	var WINDOW = typeof window === 'object';
 	var root = WINDOW ? window : {};
 	if (root.JS_SHA256_NO_WINDOW) {
-	  WINDOW = false;
+		WINDOW = false;
 	}
 	var WEB_WORKER = !WINDOW && typeof self === 'object';
 	var NODE_JS = !root.JS_SHA256_NO_NODE_JS && typeof process === 'object' && process.versions && process.versions.node;
 	if (NODE_JS) {
-	  root = global;
+		root = global;
 	} else if (WEB_WORKER) {
-	  root = self;
+		root = self;
 	}
 	var COMMON_JS = !root.JS_SHA256_NO_COMMON_JS && typeof module === 'object' && module.exports;
 	var AMD = typeof define === 'function' && define.amd;
@@ -1278,498 +1304,498 @@ function surge(content, url) {
 	var EXTRA = [-2147483648, 8388608, 32768, 128];
 	var SHIFT = [24, 16, 8, 0];
 	var K = [
-	  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-	  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-	  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-	  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-	  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-	  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-	  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-	  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+		0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+		0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+		0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+		0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+		0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+		0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+		0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+		0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 	];
 	var OUTPUT_TYPES = ['hex', 'array', 'digest', 'arrayBuffer'];
-  
+
 	var blocks = [];
-  
+
 	if (root.JS_SHA256_NO_NODE_JS || !Array.isArray) {
-	  Array.isArray = function (obj) {
-		return Object.prototype.toString.call(obj) === '[object Array]';
-	  };
-	}
-  
-	if (ARRAY_BUFFER && (root.JS_SHA256_NO_ARRAY_BUFFER_IS_VIEW || !ArrayBuffer.isView)) {
-	  ArrayBuffer.isView = function (obj) {
-		return typeof obj === 'object' && obj.buffer && obj.buffer.constructor === ArrayBuffer;
-	  };
-	}
-  
-	var createOutputMethod = function (outputType, is224) {
-	  return function (message) {
-		return new Sha256(is224, true).update(message)[outputType]();
-	  };
-	};
-  
-	var createMethod = function (is224) {
-	  var method = createOutputMethod('hex', is224);
-	  if (NODE_JS) {
-		method = nodeWrap(method, is224);
-	  }
-	  method.create = function () {
-		return new Sha256(is224);
-	  };
-	  method.update = function (message) {
-		return method.create().update(message);
-	  };
-	  for (var i = 0; i < OUTPUT_TYPES.length; ++i) {
-		var type = OUTPUT_TYPES[i];
-		method[type] = createOutputMethod(type, is224);
-	  }
-	  return method;
-	};
-  
-	var nodeWrap = function (method, is224) {
-	  var crypto = require('crypto')
-	  var Buffer = require('buffer').Buffer;
-	  var algorithm = is224 ? 'sha224' : 'sha256';
-	  var bufferFrom;
-	  if (Buffer.from && !root.JS_SHA256_NO_BUFFER_FROM) {
-		bufferFrom = Buffer.from;
-	  } else {
-		bufferFrom = function (message) {
-		  return new Buffer(message);
+		Array.isArray = function (obj) {
+			return Object.prototype.toString.call(obj) === '[object Array]';
 		};
-	  }
-	  var nodeMethod = function (message) {
-		if (typeof message === 'string') {
-		  return crypto.createHash(algorithm).update(message, 'utf8').digest('hex');
-		} else {
-		  if (message === null || message === undefined) {
-			throw new Error(ERROR);
-		  } else if (message.constructor === ArrayBuffer) {
-			message = new Uint8Array(message);
-		  }
-		}
-		if (Array.isArray(message) || ArrayBuffer.isView(message) ||
-		  message.constructor === Buffer) {
-		  return crypto.createHash(algorithm).update(bufferFrom(message)).digest('hex');
-		} else {
-		  return method(message);
-		}
-	  };
-	  return nodeMethod;
-	};
-  
-	var createHmacOutputMethod = function (outputType, is224) {
-	  return function (key, message) {
-		return new HmacSha256(key, is224, true).update(message)[outputType]();
-	  };
-	};
-  
-	var createHmacMethod = function (is224) {
-	  var method = createHmacOutputMethod('hex', is224);
-	  method.create = function (key) {
-		return new HmacSha256(key, is224);
-	  };
-	  method.update = function (key, message) {
-		return method.create(key).update(message);
-	  };
-	  for (var i = 0; i < OUTPUT_TYPES.length; ++i) {
-		var type = OUTPUT_TYPES[i];
-		method[type] = createHmacOutputMethod(type, is224);
-	  }
-	  return method;
-	};
-  
-	function Sha256(is224, sharedMemory) {
-	  if (sharedMemory) {
-		blocks[0] = blocks[16] = blocks[1] = blocks[2] = blocks[3] =
-		  blocks[4] = blocks[5] = blocks[6] = blocks[7] =
-		  blocks[8] = blocks[9] = blocks[10] = blocks[11] =
-		  blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
-		this.blocks = blocks;
-	  } else {
-		this.blocks = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-	  }
-  
-	  if (is224) {
-		this.h0 = 0xc1059ed8;
-		this.h1 = 0x367cd507;
-		this.h2 = 0x3070dd17;
-		this.h3 = 0xf70e5939;
-		this.h4 = 0xffc00b31;
-		this.h5 = 0x68581511;
-		this.h6 = 0x64f98fa7;
-		this.h7 = 0xbefa4fa4;
-	  } else { // 256
-		this.h0 = 0x6a09e667;
-		this.h1 = 0xbb67ae85;
-		this.h2 = 0x3c6ef372;
-		this.h3 = 0xa54ff53a;
-		this.h4 = 0x510e527f;
-		this.h5 = 0x9b05688c;
-		this.h6 = 0x1f83d9ab;
-		this.h7 = 0x5be0cd19;
-	  }
-  
-	  this.block = this.start = this.bytes = this.hBytes = 0;
-	  this.finalized = this.hashed = false;
-	  this.first = true;
-	  this.is224 = is224;
 	}
-  
-	Sha256.prototype.update = function (message) {
-	  if (this.finalized) {
-		return;
-	  }
-	  var notString, type = typeof message;
-	  if (type !== 'string') {
-		if (type === 'object') {
-		  if (message === null) {
-			throw new Error(ERROR);
-		  } else if (ARRAY_BUFFER && message.constructor === ArrayBuffer) {
-			message = new Uint8Array(message);
-		  } else if (!Array.isArray(message)) {
-			if (!ARRAY_BUFFER || !ArrayBuffer.isView(message)) {
-			  throw new Error(ERROR);
-			}
-		  }
-		} else {
-		  throw new Error(ERROR);
+
+	if (ARRAY_BUFFER && (root.JS_SHA256_NO_ARRAY_BUFFER_IS_VIEW || !ArrayBuffer.isView)) {
+		ArrayBuffer.isView = function (obj) {
+			return typeof obj === 'object' && obj.buffer && obj.buffer.constructor === ArrayBuffer;
+		};
+	}
+
+	var createOutputMethod = function (outputType, is224) {
+		return function (message) {
+			return new Sha256(is224, true).update(message)[outputType]();
+		};
+	};
+
+	var createMethod = function (is224) {
+		var method = createOutputMethod('hex', is224);
+		if (NODE_JS) {
+			method = nodeWrap(method, is224);
 		}
-		notString = true;
-	  }
-	  var code, index = 0, i, length = message.length, blocks = this.blocks;
-	  while (index < length) {
-		if (this.hashed) {
-		  this.hashed = false;
-		  blocks[0] = this.block;
-		  this.block = blocks[16] = blocks[1] = blocks[2] = blocks[3] =
-			blocks[4] = blocks[5] = blocks[6] = blocks[7] =
-			blocks[8] = blocks[9] = blocks[10] = blocks[11] =
-			blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
+		method.create = function () {
+			return new Sha256(is224);
+		};
+		method.update = function (message) {
+			return method.create().update(message);
+		};
+		for (var i = 0; i < OUTPUT_TYPES.length; ++i) {
+			var type = OUTPUT_TYPES[i];
+			method[type] = createOutputMethod(type, is224);
 		}
-  
-		if (notString) {
-		  for (i = this.start; index < length && i < 64; ++index) {
-			blocks[i >>> 2] |= message[index] << SHIFT[i++ & 3];
-		  }
+		return method;
+	};
+
+	var nodeWrap = function (method, is224) {
+		var crypto = require('crypto')
+		var Buffer = require('buffer').Buffer;
+		var algorithm = is224 ? 'sha224' : 'sha256';
+		var bufferFrom;
+		if (Buffer.from && !root.JS_SHA256_NO_BUFFER_FROM) {
+			bufferFrom = Buffer.from;
 		} else {
-		  for (i = this.start; index < length && i < 64; ++index) {
-			code = message.charCodeAt(index);
-			if (code < 0x80) {
-			  blocks[i >>> 2] |= code << SHIFT[i++ & 3];
-			} else if (code < 0x800) {
-			  blocks[i >>> 2] |= (0xc0 | (code >>> 6)) << SHIFT[i++ & 3];
-			  blocks[i >>> 2] |= (0x80 | (code & 0x3f)) << SHIFT[i++ & 3];
-			} else if (code < 0xd800 || code >= 0xe000) {
-			  blocks[i >>> 2] |= (0xe0 | (code >>> 12)) << SHIFT[i++ & 3];
-			  blocks[i >>> 2] |= (0x80 | ((code >>> 6) & 0x3f)) << SHIFT[i++ & 3];
-			  blocks[i >>> 2] |= (0x80 | (code & 0x3f)) << SHIFT[i++ & 3];
+			bufferFrom = function (message) {
+				return new Buffer(message);
+			};
+		}
+		var nodeMethod = function (message) {
+			if (typeof message === 'string') {
+				return crypto.createHash(algorithm).update(message, 'utf8').digest('hex');
 			} else {
-			  code = 0x10000 + (((code & 0x3ff) << 10) | (message.charCodeAt(++index) & 0x3ff));
-			  blocks[i >>> 2] |= (0xf0 | (code >>> 18)) << SHIFT[i++ & 3];
-			  blocks[i >>> 2] |= (0x80 | ((code >>> 12) & 0x3f)) << SHIFT[i++ & 3];
-			  blocks[i >>> 2] |= (0x80 | ((code >>> 6) & 0x3f)) << SHIFT[i++ & 3];
-			  blocks[i >>> 2] |= (0x80 | (code & 0x3f)) << SHIFT[i++ & 3];
+				if (message === null || message === undefined) {
+					throw new Error(ERROR);
+				} else if (message.constructor === ArrayBuffer) {
+					message = new Uint8Array(message);
+				}
 			}
-		  }
-		}
-  
-		this.lastByteIndex = i;
-		this.bytes += i - this.start;
-		if (i >= 64) {
-		  this.block = blocks[16];
-		  this.start = i - 64;
-		  this.hash();
-		  this.hashed = true;
-		} else {
-		  this.start = i;
-		}
-	  }
-	  if (this.bytes > 4294967295) {
-		this.hBytes += this.bytes / 4294967296 << 0;
-		this.bytes = this.bytes % 4294967296;
-	  }
-	  return this;
+			if (Array.isArray(message) || ArrayBuffer.isView(message) ||
+				message.constructor === Buffer) {
+				return crypto.createHash(algorithm).update(bufferFrom(message)).digest('hex');
+			} else {
+				return method(message);
+			}
+		};
+		return nodeMethod;
 	};
-  
+
+	var createHmacOutputMethod = function (outputType, is224) {
+		return function (key, message) {
+			return new HmacSha256(key, is224, true).update(message)[outputType]();
+		};
+	};
+
+	var createHmacMethod = function (is224) {
+		var method = createHmacOutputMethod('hex', is224);
+		method.create = function (key) {
+			return new HmacSha256(key, is224);
+		};
+		method.update = function (key, message) {
+			return method.create(key).update(message);
+		};
+		for (var i = 0; i < OUTPUT_TYPES.length; ++i) {
+			var type = OUTPUT_TYPES[i];
+			method[type] = createHmacOutputMethod(type, is224);
+		}
+		return method;
+	};
+
+	function Sha256(is224, sharedMemory) {
+		if (sharedMemory) {
+			blocks[0] = blocks[16] = blocks[1] = blocks[2] = blocks[3] =
+				blocks[4] = blocks[5] = blocks[6] = blocks[7] =
+				blocks[8] = blocks[9] = blocks[10] = blocks[11] =
+				blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
+			this.blocks = blocks;
+		} else {
+			this.blocks = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+		}
+
+		if (is224) {
+			this.h0 = 0xc1059ed8;
+			this.h1 = 0x367cd507;
+			this.h2 = 0x3070dd17;
+			this.h3 = 0xf70e5939;
+			this.h4 = 0xffc00b31;
+			this.h5 = 0x68581511;
+			this.h6 = 0x64f98fa7;
+			this.h7 = 0xbefa4fa4;
+		} else { // 256
+			this.h0 = 0x6a09e667;
+			this.h1 = 0xbb67ae85;
+			this.h2 = 0x3c6ef372;
+			this.h3 = 0xa54ff53a;
+			this.h4 = 0x510e527f;
+			this.h5 = 0x9b05688c;
+			this.h6 = 0x1f83d9ab;
+			this.h7 = 0x5be0cd19;
+		}
+
+		this.block = this.start = this.bytes = this.hBytes = 0;
+		this.finalized = this.hashed = false;
+		this.first = true;
+		this.is224 = is224;
+	}
+
+	Sha256.prototype.update = function (message) {
+		if (this.finalized) {
+			return;
+		}
+		var notString, type = typeof message;
+		if (type !== 'string') {
+			if (type === 'object') {
+				if (message === null) {
+					throw new Error(ERROR);
+				} else if (ARRAY_BUFFER && message.constructor === ArrayBuffer) {
+					message = new Uint8Array(message);
+				} else if (!Array.isArray(message)) {
+					if (!ARRAY_BUFFER || !ArrayBuffer.isView(message)) {
+						throw new Error(ERROR);
+					}
+				}
+			} else {
+				throw new Error(ERROR);
+			}
+			notString = true;
+		}
+		var code, index = 0, i, length = message.length, blocks = this.blocks;
+		while (index < length) {
+			if (this.hashed) {
+				this.hashed = false;
+				blocks[0] = this.block;
+				this.block = blocks[16] = blocks[1] = blocks[2] = blocks[3] =
+					blocks[4] = blocks[5] = blocks[6] = blocks[7] =
+					blocks[8] = blocks[9] = blocks[10] = blocks[11] =
+					blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
+			}
+
+			if (notString) {
+				for (i = this.start; index < length && i < 64; ++index) {
+					blocks[i >>> 2] |= message[index] << SHIFT[i++ & 3];
+				}
+			} else {
+				for (i = this.start; index < length && i < 64; ++index) {
+					code = message.charCodeAt(index);
+					if (code < 0x80) {
+						blocks[i >>> 2] |= code << SHIFT[i++ & 3];
+					} else if (code < 0x800) {
+						blocks[i >>> 2] |= (0xc0 | (code >>> 6)) << SHIFT[i++ & 3];
+						blocks[i >>> 2] |= (0x80 | (code & 0x3f)) << SHIFT[i++ & 3];
+					} else if (code < 0xd800 || code >= 0xe000) {
+						blocks[i >>> 2] |= (0xe0 | (code >>> 12)) << SHIFT[i++ & 3];
+						blocks[i >>> 2] |= (0x80 | ((code >>> 6) & 0x3f)) << SHIFT[i++ & 3];
+						blocks[i >>> 2] |= (0x80 | (code & 0x3f)) << SHIFT[i++ & 3];
+					} else {
+						code = 0x10000 + (((code & 0x3ff) << 10) | (message.charCodeAt(++index) & 0x3ff));
+						blocks[i >>> 2] |= (0xf0 | (code >>> 18)) << SHIFT[i++ & 3];
+						blocks[i >>> 2] |= (0x80 | ((code >>> 12) & 0x3f)) << SHIFT[i++ & 3];
+						blocks[i >>> 2] |= (0x80 | ((code >>> 6) & 0x3f)) << SHIFT[i++ & 3];
+						blocks[i >>> 2] |= (0x80 | (code & 0x3f)) << SHIFT[i++ & 3];
+					}
+				}
+			}
+
+			this.lastByteIndex = i;
+			this.bytes += i - this.start;
+			if (i >= 64) {
+				this.block = blocks[16];
+				this.start = i - 64;
+				this.hash();
+				this.hashed = true;
+			} else {
+				this.start = i;
+			}
+		}
+		if (this.bytes > 4294967295) {
+			this.hBytes += this.bytes / 4294967296 << 0;
+			this.bytes = this.bytes % 4294967296;
+		}
+		return this;
+	};
+
 	Sha256.prototype.finalize = function () {
-	  if (this.finalized) {
-		return;
-	  }
-	  this.finalized = true;
-	  var blocks = this.blocks, i = this.lastByteIndex;
-	  blocks[16] = this.block;
-	  blocks[i >>> 2] |= EXTRA[i & 3];
-	  this.block = blocks[16];
-	  if (i >= 56) {
-		if (!this.hashed) {
-		  this.hash();
+		if (this.finalized) {
+			return;
 		}
-		blocks[0] = this.block;
-		blocks[16] = blocks[1] = blocks[2] = blocks[3] =
-		  blocks[4] = blocks[5] = blocks[6] = blocks[7] =
-		  blocks[8] = blocks[9] = blocks[10] = blocks[11] =
-		  blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
-	  }
-	  blocks[14] = this.hBytes << 3 | this.bytes >>> 29;
-	  blocks[15] = this.bytes << 3;
-	  this.hash();
-	};
-  
-	Sha256.prototype.hash = function () {
-	  var a = this.h0, b = this.h1, c = this.h2, d = this.h3, e = this.h4, f = this.h5, g = this.h6,
-		h = this.h7, blocks = this.blocks, j, s0, s1, maj, t1, t2, ch, ab, da, cd, bc;
-  
-	  for (j = 16; j < 64; ++j) {
-		// rightrotate
-		t1 = blocks[j - 15];
-		s0 = ((t1 >>> 7) | (t1 << 25)) ^ ((t1 >>> 18) | (t1 << 14)) ^ (t1 >>> 3);
-		t1 = blocks[j - 2];
-		s1 = ((t1 >>> 17) | (t1 << 15)) ^ ((t1 >>> 19) | (t1 << 13)) ^ (t1 >>> 10);
-		blocks[j] = blocks[j - 16] + s0 + blocks[j - 7] + s1 << 0;
-	  }
-  
-	  bc = b & c;
-	  for (j = 0; j < 64; j += 4) {
-		if (this.first) {
-		  if (this.is224) {
-			ab = 300032;
-			t1 = blocks[0] - 1413257819;
-			h = t1 - 150054599 << 0;
-			d = t1 + 24177077 << 0;
-		  } else {
-			ab = 704751109;
-			t1 = blocks[0] - 210244248;
-			h = t1 - 1521486534 << 0;
-			d = t1 + 143694565 << 0;
-		  }
-		  this.first = false;
-		} else {
-		  s0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
-		  s1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
-		  ab = a & b;
-		  maj = ab ^ (a & c) ^ bc;
-		  ch = (e & f) ^ (~e & g);
-		  t1 = h + s1 + ch + K[j] + blocks[j];
-		  t2 = s0 + maj;
-		  h = d + t1 << 0;
-		  d = t1 + t2 << 0;
-		}
-		s0 = ((d >>> 2) | (d << 30)) ^ ((d >>> 13) | (d << 19)) ^ ((d >>> 22) | (d << 10));
-		s1 = ((h >>> 6) | (h << 26)) ^ ((h >>> 11) | (h << 21)) ^ ((h >>> 25) | (h << 7));
-		da = d & a;
-		maj = da ^ (d & b) ^ ab;
-		ch = (h & e) ^ (~h & f);
-		t1 = g + s1 + ch + K[j + 1] + blocks[j + 1];
-		t2 = s0 + maj;
-		g = c + t1 << 0;
-		c = t1 + t2 << 0;
-		s0 = ((c >>> 2) | (c << 30)) ^ ((c >>> 13) | (c << 19)) ^ ((c >>> 22) | (c << 10));
-		s1 = ((g >>> 6) | (g << 26)) ^ ((g >>> 11) | (g << 21)) ^ ((g >>> 25) | (g << 7));
-		cd = c & d;
-		maj = cd ^ (c & a) ^ da;
-		ch = (g & h) ^ (~g & e);
-		t1 = f + s1 + ch + K[j + 2] + blocks[j + 2];
-		t2 = s0 + maj;
-		f = b + t1 << 0;
-		b = t1 + t2 << 0;
-		s0 = ((b >>> 2) | (b << 30)) ^ ((b >>> 13) | (b << 19)) ^ ((b >>> 22) | (b << 10));
-		s1 = ((f >>> 6) | (f << 26)) ^ ((f >>> 11) | (f << 21)) ^ ((f >>> 25) | (f << 7));
-		bc = b & c;
-		maj = bc ^ (b & d) ^ cd;
-		ch = (f & g) ^ (~f & h);
-		t1 = e + s1 + ch + K[j + 3] + blocks[j + 3];
-		t2 = s0 + maj;
-		e = a + t1 << 0;
-		a = t1 + t2 << 0;
-		this.chromeBugWorkAround = true;
-	  }
-  
-	  this.h0 = this.h0 + a << 0;
-	  this.h1 = this.h1 + b << 0;
-	  this.h2 = this.h2 + c << 0;
-	  this.h3 = this.h3 + d << 0;
-	  this.h4 = this.h4 + e << 0;
-	  this.h5 = this.h5 + f << 0;
-	  this.h6 = this.h6 + g << 0;
-	  this.h7 = this.h7 + h << 0;
-	};
-  
-	Sha256.prototype.hex = function () {
-	  this.finalize();
-  
-	  var h0 = this.h0, h1 = this.h1, h2 = this.h2, h3 = this.h3, h4 = this.h4, h5 = this.h5,
-		h6 = this.h6, h7 = this.h7;
-  
-	  var hex = HEX_CHARS[(h0 >>> 28) & 0x0F] + HEX_CHARS[(h0 >>> 24) & 0x0F] +
-		HEX_CHARS[(h0 >>> 20) & 0x0F] + HEX_CHARS[(h0 >>> 16) & 0x0F] +
-		HEX_CHARS[(h0 >>> 12) & 0x0F] + HEX_CHARS[(h0 >>> 8) & 0x0F] +
-		HEX_CHARS[(h0 >>> 4) & 0x0F] + HEX_CHARS[h0 & 0x0F] +
-		HEX_CHARS[(h1 >>> 28) & 0x0F] + HEX_CHARS[(h1 >>> 24) & 0x0F] +
-		HEX_CHARS[(h1 >>> 20) & 0x0F] + HEX_CHARS[(h1 >>> 16) & 0x0F] +
-		HEX_CHARS[(h1 >>> 12) & 0x0F] + HEX_CHARS[(h1 >>> 8) & 0x0F] +
-		HEX_CHARS[(h1 >>> 4) & 0x0F] + HEX_CHARS[h1 & 0x0F] +
-		HEX_CHARS[(h2 >>> 28) & 0x0F] + HEX_CHARS[(h2 >>> 24) & 0x0F] +
-		HEX_CHARS[(h2 >>> 20) & 0x0F] + HEX_CHARS[(h2 >>> 16) & 0x0F] +
-		HEX_CHARS[(h2 >>> 12) & 0x0F] + HEX_CHARS[(h2 >>> 8) & 0x0F] +
-		HEX_CHARS[(h2 >>> 4) & 0x0F] + HEX_CHARS[h2 & 0x0F] +
-		HEX_CHARS[(h3 >>> 28) & 0x0F] + HEX_CHARS[(h3 >>> 24) & 0x0F] +
-		HEX_CHARS[(h3 >>> 20) & 0x0F] + HEX_CHARS[(h3 >>> 16) & 0x0F] +
-		HEX_CHARS[(h3 >>> 12) & 0x0F] + HEX_CHARS[(h3 >>> 8) & 0x0F] +
-		HEX_CHARS[(h3 >>> 4) & 0x0F] + HEX_CHARS[h3 & 0x0F] +
-		HEX_CHARS[(h4 >>> 28) & 0x0F] + HEX_CHARS[(h4 >>> 24) & 0x0F] +
-		HEX_CHARS[(h4 >>> 20) & 0x0F] + HEX_CHARS[(h4 >>> 16) & 0x0F] +
-		HEX_CHARS[(h4 >>> 12) & 0x0F] + HEX_CHARS[(h4 >>> 8) & 0x0F] +
-		HEX_CHARS[(h4 >>> 4) & 0x0F] + HEX_CHARS[h4 & 0x0F] +
-		HEX_CHARS[(h5 >>> 28) & 0x0F] + HEX_CHARS[(h5 >>> 24) & 0x0F] +
-		HEX_CHARS[(h5 >>> 20) & 0x0F] + HEX_CHARS[(h5 >>> 16) & 0x0F] +
-		HEX_CHARS[(h5 >>> 12) & 0x0F] + HEX_CHARS[(h5 >>> 8) & 0x0F] +
-		HEX_CHARS[(h5 >>> 4) & 0x0F] + HEX_CHARS[h5 & 0x0F] +
-		HEX_CHARS[(h6 >>> 28) & 0x0F] + HEX_CHARS[(h6 >>> 24) & 0x0F] +
-		HEX_CHARS[(h6 >>> 20) & 0x0F] + HEX_CHARS[(h6 >>> 16) & 0x0F] +
-		HEX_CHARS[(h6 >>> 12) & 0x0F] + HEX_CHARS[(h6 >>> 8) & 0x0F] +
-		HEX_CHARS[(h6 >>> 4) & 0x0F] + HEX_CHARS[h6 & 0x0F];
-	  if (!this.is224) {
-		hex += HEX_CHARS[(h7 >>> 28) & 0x0F] + HEX_CHARS[(h7 >>> 24) & 0x0F] +
-		  HEX_CHARS[(h7 >>> 20) & 0x0F] + HEX_CHARS[(h7 >>> 16) & 0x0F] +
-		  HEX_CHARS[(h7 >>> 12) & 0x0F] + HEX_CHARS[(h7 >>> 8) & 0x0F] +
-		  HEX_CHARS[(h7 >>> 4) & 0x0F] + HEX_CHARS[h7 & 0x0F];
-	  }
-	  return hex;
-	};
-  
-	Sha256.prototype.toString = Sha256.prototype.hex;
-  
-	Sha256.prototype.digest = function () {
-	  this.finalize();
-  
-	  var h0 = this.h0, h1 = this.h1, h2 = this.h2, h3 = this.h3, h4 = this.h4, h5 = this.h5,
-		h6 = this.h6, h7 = this.h7;
-  
-	  var arr = [
-		(h0 >>> 24) & 0xFF, (h0 >>> 16) & 0xFF, (h0 >>> 8) & 0xFF, h0 & 0xFF,
-		(h1 >>> 24) & 0xFF, (h1 >>> 16) & 0xFF, (h1 >>> 8) & 0xFF, h1 & 0xFF,
-		(h2 >>> 24) & 0xFF, (h2 >>> 16) & 0xFF, (h2 >>> 8) & 0xFF, h2 & 0xFF,
-		(h3 >>> 24) & 0xFF, (h3 >>> 16) & 0xFF, (h3 >>> 8) & 0xFF, h3 & 0xFF,
-		(h4 >>> 24) & 0xFF, (h4 >>> 16) & 0xFF, (h4 >>> 8) & 0xFF, h4 & 0xFF,
-		(h5 >>> 24) & 0xFF, (h5 >>> 16) & 0xFF, (h5 >>> 8) & 0xFF, h5 & 0xFF,
-		(h6 >>> 24) & 0xFF, (h6 >>> 16) & 0xFF, (h6 >>> 8) & 0xFF, h6 & 0xFF
-	  ];
-	  if (!this.is224) {
-		arr.push((h7 >>> 24) & 0xFF, (h7 >>> 16) & 0xFF, (h7 >>> 8) & 0xFF, h7 & 0xFF);
-	  }
-	  return arr;
-	};
-  
-	Sha256.prototype.array = Sha256.prototype.digest;
-  
-	Sha256.prototype.arrayBuffer = function () {
-	  this.finalize();
-  
-	  var buffer = new ArrayBuffer(this.is224 ? 28 : 32);
-	  var dataView = new DataView(buffer);
-	  dataView.setUint32(0, this.h0);
-	  dataView.setUint32(4, this.h1);
-	  dataView.setUint32(8, this.h2);
-	  dataView.setUint32(12, this.h3);
-	  dataView.setUint32(16, this.h4);
-	  dataView.setUint32(20, this.h5);
-	  dataView.setUint32(24, this.h6);
-	  if (!this.is224) {
-		dataView.setUint32(28, this.h7);
-	  }
-	  return buffer;
-	};
-  
-	function HmacSha256(key, is224, sharedMemory) {
-	  var i, type = typeof key;
-	  if (type === 'string') {
-		var bytes = [], length = key.length, index = 0, code;
-		for (i = 0; i < length; ++i) {
-		  code = key.charCodeAt(i);
-		  if (code < 0x80) {
-			bytes[index++] = code;
-		  } else if (code < 0x800) {
-			bytes[index++] = (0xc0 | (code >>> 6));
-			bytes[index++] = (0x80 | (code & 0x3f));
-		  } else if (code < 0xd800 || code >= 0xe000) {
-			bytes[index++] = (0xe0 | (code >>> 12));
-			bytes[index++] = (0x80 | ((code >>> 6) & 0x3f));
-			bytes[index++] = (0x80 | (code & 0x3f));
-		  } else {
-			code = 0x10000 + (((code & 0x3ff) << 10) | (key.charCodeAt(++i) & 0x3ff));
-			bytes[index++] = (0xf0 | (code >>> 18));
-			bytes[index++] = (0x80 | ((code >>> 12) & 0x3f));
-			bytes[index++] = (0x80 | ((code >>> 6) & 0x3f));
-			bytes[index++] = (0x80 | (code & 0x3f));
-		  }
-		}
-		key = bytes;
-	  } else {
-		if (type === 'object') {
-		  if (key === null) {
-			throw new Error(ERROR);
-		  } else if (ARRAY_BUFFER && key.constructor === ArrayBuffer) {
-			key = new Uint8Array(key);
-		  } else if (!Array.isArray(key)) {
-			if (!ARRAY_BUFFER || !ArrayBuffer.isView(key)) {
-			  throw new Error(ERROR);
+		this.finalized = true;
+		var blocks = this.blocks, i = this.lastByteIndex;
+		blocks[16] = this.block;
+		blocks[i >>> 2] |= EXTRA[i & 3];
+		this.block = blocks[16];
+		if (i >= 56) {
+			if (!this.hashed) {
+				this.hash();
 			}
-		  }
-		} else {
-		  throw new Error(ERROR);
+			blocks[0] = this.block;
+			blocks[16] = blocks[1] = blocks[2] = blocks[3] =
+				blocks[4] = blocks[5] = blocks[6] = blocks[7] =
+				blocks[8] = blocks[9] = blocks[10] = blocks[11] =
+				blocks[12] = blocks[13] = blocks[14] = blocks[15] = 0;
 		}
-	  }
-  
-	  if (key.length > 64) {
-		key = (new Sha256(is224, true)).update(key).array();
-	  }
-  
-	  var oKeyPad = [], iKeyPad = [];
-	  for (i = 0; i < 64; ++i) {
-		var b = key[i] || 0;
-		oKeyPad[i] = 0x5c ^ b;
-		iKeyPad[i] = 0x36 ^ b;
-	  }
-  
-	  Sha256.call(this, is224, sharedMemory);
-  
-	  this.update(iKeyPad);
-	  this.oKeyPad = oKeyPad;
-	  this.inner = true;
-	  this.sharedMemory = sharedMemory;
+		blocks[14] = this.hBytes << 3 | this.bytes >>> 29;
+		blocks[15] = this.bytes << 3;
+		this.hash();
+	};
+
+	Sha256.prototype.hash = function () {
+		var a = this.h0, b = this.h1, c = this.h2, d = this.h3, e = this.h4, f = this.h5, g = this.h6,
+			h = this.h7, blocks = this.blocks, j, s0, s1, maj, t1, t2, ch, ab, da, cd, bc;
+
+		for (j = 16; j < 64; ++j) {
+			// rightrotate
+			t1 = blocks[j - 15];
+			s0 = ((t1 >>> 7) | (t1 << 25)) ^ ((t1 >>> 18) | (t1 << 14)) ^ (t1 >>> 3);
+			t1 = blocks[j - 2];
+			s1 = ((t1 >>> 17) | (t1 << 15)) ^ ((t1 >>> 19) | (t1 << 13)) ^ (t1 >>> 10);
+			blocks[j] = blocks[j - 16] + s0 + blocks[j - 7] + s1 << 0;
+		}
+
+		bc = b & c;
+		for (j = 0; j < 64; j += 4) {
+			if (this.first) {
+				if (this.is224) {
+					ab = 300032;
+					t1 = blocks[0] - 1413257819;
+					h = t1 - 150054599 << 0;
+					d = t1 + 24177077 << 0;
+				} else {
+					ab = 704751109;
+					t1 = blocks[0] - 210244248;
+					h = t1 - 1521486534 << 0;
+					d = t1 + 143694565 << 0;
+				}
+				this.first = false;
+			} else {
+				s0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+				s1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+				ab = a & b;
+				maj = ab ^ (a & c) ^ bc;
+				ch = (e & f) ^ (~e & g);
+				t1 = h + s1 + ch + K[j] + blocks[j];
+				t2 = s0 + maj;
+				h = d + t1 << 0;
+				d = t1 + t2 << 0;
+			}
+			s0 = ((d >>> 2) | (d << 30)) ^ ((d >>> 13) | (d << 19)) ^ ((d >>> 22) | (d << 10));
+			s1 = ((h >>> 6) | (h << 26)) ^ ((h >>> 11) | (h << 21)) ^ ((h >>> 25) | (h << 7));
+			da = d & a;
+			maj = da ^ (d & b) ^ ab;
+			ch = (h & e) ^ (~h & f);
+			t1 = g + s1 + ch + K[j + 1] + blocks[j + 1];
+			t2 = s0 + maj;
+			g = c + t1 << 0;
+			c = t1 + t2 << 0;
+			s0 = ((c >>> 2) | (c << 30)) ^ ((c >>> 13) | (c << 19)) ^ ((c >>> 22) | (c << 10));
+			s1 = ((g >>> 6) | (g << 26)) ^ ((g >>> 11) | (g << 21)) ^ ((g >>> 25) | (g << 7));
+			cd = c & d;
+			maj = cd ^ (c & a) ^ da;
+			ch = (g & h) ^ (~g & e);
+			t1 = f + s1 + ch + K[j + 2] + blocks[j + 2];
+			t2 = s0 + maj;
+			f = b + t1 << 0;
+			b = t1 + t2 << 0;
+			s0 = ((b >>> 2) | (b << 30)) ^ ((b >>> 13) | (b << 19)) ^ ((b >>> 22) | (b << 10));
+			s1 = ((f >>> 6) | (f << 26)) ^ ((f >>> 11) | (f << 21)) ^ ((f >>> 25) | (f << 7));
+			bc = b & c;
+			maj = bc ^ (b & d) ^ cd;
+			ch = (f & g) ^ (~f & h);
+			t1 = e + s1 + ch + K[j + 3] + blocks[j + 3];
+			t2 = s0 + maj;
+			e = a + t1 << 0;
+			a = t1 + t2 << 0;
+			this.chromeBugWorkAround = true;
+		}
+
+		this.h0 = this.h0 + a << 0;
+		this.h1 = this.h1 + b << 0;
+		this.h2 = this.h2 + c << 0;
+		this.h3 = this.h3 + d << 0;
+		this.h4 = this.h4 + e << 0;
+		this.h5 = this.h5 + f << 0;
+		this.h6 = this.h6 + g << 0;
+		this.h7 = this.h7 + h << 0;
+	};
+
+	Sha256.prototype.hex = function () {
+		this.finalize();
+
+		var h0 = this.h0, h1 = this.h1, h2 = this.h2, h3 = this.h3, h4 = this.h4, h5 = this.h5,
+			h6 = this.h6, h7 = this.h7;
+
+		var hex = HEX_CHARS[(h0 >>> 28) & 0x0F] + HEX_CHARS[(h0 >>> 24) & 0x0F] +
+			HEX_CHARS[(h0 >>> 20) & 0x0F] + HEX_CHARS[(h0 >>> 16) & 0x0F] +
+			HEX_CHARS[(h0 >>> 12) & 0x0F] + HEX_CHARS[(h0 >>> 8) & 0x0F] +
+			HEX_CHARS[(h0 >>> 4) & 0x0F] + HEX_CHARS[h0 & 0x0F] +
+			HEX_CHARS[(h1 >>> 28) & 0x0F] + HEX_CHARS[(h1 >>> 24) & 0x0F] +
+			HEX_CHARS[(h1 >>> 20) & 0x0F] + HEX_CHARS[(h1 >>> 16) & 0x0F] +
+			HEX_CHARS[(h1 >>> 12) & 0x0F] + HEX_CHARS[(h1 >>> 8) & 0x0F] +
+			HEX_CHARS[(h1 >>> 4) & 0x0F] + HEX_CHARS[h1 & 0x0F] +
+			HEX_CHARS[(h2 >>> 28) & 0x0F] + HEX_CHARS[(h2 >>> 24) & 0x0F] +
+			HEX_CHARS[(h2 >>> 20) & 0x0F] + HEX_CHARS[(h2 >>> 16) & 0x0F] +
+			HEX_CHARS[(h2 >>> 12) & 0x0F] + HEX_CHARS[(h2 >>> 8) & 0x0F] +
+			HEX_CHARS[(h2 >>> 4) & 0x0F] + HEX_CHARS[h2 & 0x0F] +
+			HEX_CHARS[(h3 >>> 28) & 0x0F] + HEX_CHARS[(h3 >>> 24) & 0x0F] +
+			HEX_CHARS[(h3 >>> 20) & 0x0F] + HEX_CHARS[(h3 >>> 16) & 0x0F] +
+			HEX_CHARS[(h3 >>> 12) & 0x0F] + HEX_CHARS[(h3 >>> 8) & 0x0F] +
+			HEX_CHARS[(h3 >>> 4) & 0x0F] + HEX_CHARS[h3 & 0x0F] +
+			HEX_CHARS[(h4 >>> 28) & 0x0F] + HEX_CHARS[(h4 >>> 24) & 0x0F] +
+			HEX_CHARS[(h4 >>> 20) & 0x0F] + HEX_CHARS[(h4 >>> 16) & 0x0F] +
+			HEX_CHARS[(h4 >>> 12) & 0x0F] + HEX_CHARS[(h4 >>> 8) & 0x0F] +
+			HEX_CHARS[(h4 >>> 4) & 0x0F] + HEX_CHARS[h4 & 0x0F] +
+			HEX_CHARS[(h5 >>> 28) & 0x0F] + HEX_CHARS[(h5 >>> 24) & 0x0F] +
+			HEX_CHARS[(h5 >>> 20) & 0x0F] + HEX_CHARS[(h5 >>> 16) & 0x0F] +
+			HEX_CHARS[(h5 >>> 12) & 0x0F] + HEX_CHARS[(h5 >>> 8) & 0x0F] +
+			HEX_CHARS[(h5 >>> 4) & 0x0F] + HEX_CHARS[h5 & 0x0F] +
+			HEX_CHARS[(h6 >>> 28) & 0x0F] + HEX_CHARS[(h6 >>> 24) & 0x0F] +
+			HEX_CHARS[(h6 >>> 20) & 0x0F] + HEX_CHARS[(h6 >>> 16) & 0x0F] +
+			HEX_CHARS[(h6 >>> 12) & 0x0F] + HEX_CHARS[(h6 >>> 8) & 0x0F] +
+			HEX_CHARS[(h6 >>> 4) & 0x0F] + HEX_CHARS[h6 & 0x0F];
+		if (!this.is224) {
+			hex += HEX_CHARS[(h7 >>> 28) & 0x0F] + HEX_CHARS[(h7 >>> 24) & 0x0F] +
+				HEX_CHARS[(h7 >>> 20) & 0x0F] + HEX_CHARS[(h7 >>> 16) & 0x0F] +
+				HEX_CHARS[(h7 >>> 12) & 0x0F] + HEX_CHARS[(h7 >>> 8) & 0x0F] +
+				HEX_CHARS[(h7 >>> 4) & 0x0F] + HEX_CHARS[h7 & 0x0F];
+		}
+		return hex;
+	};
+
+	Sha256.prototype.toString = Sha256.prototype.hex;
+
+	Sha256.prototype.digest = function () {
+		this.finalize();
+
+		var h0 = this.h0, h1 = this.h1, h2 = this.h2, h3 = this.h3, h4 = this.h4, h5 = this.h5,
+			h6 = this.h6, h7 = this.h7;
+
+		var arr = [
+			(h0 >>> 24) & 0xFF, (h0 >>> 16) & 0xFF, (h0 >>> 8) & 0xFF, h0 & 0xFF,
+			(h1 >>> 24) & 0xFF, (h1 >>> 16) & 0xFF, (h1 >>> 8) & 0xFF, h1 & 0xFF,
+			(h2 >>> 24) & 0xFF, (h2 >>> 16) & 0xFF, (h2 >>> 8) & 0xFF, h2 & 0xFF,
+			(h3 >>> 24) & 0xFF, (h3 >>> 16) & 0xFF, (h3 >>> 8) & 0xFF, h3 & 0xFF,
+			(h4 >>> 24) & 0xFF, (h4 >>> 16) & 0xFF, (h4 >>> 8) & 0xFF, h4 & 0xFF,
+			(h5 >>> 24) & 0xFF, (h5 >>> 16) & 0xFF, (h5 >>> 8) & 0xFF, h5 & 0xFF,
+			(h6 >>> 24) & 0xFF, (h6 >>> 16) & 0xFF, (h6 >>> 8) & 0xFF, h6 & 0xFF
+		];
+		if (!this.is224) {
+			arr.push((h7 >>> 24) & 0xFF, (h7 >>> 16) & 0xFF, (h7 >>> 8) & 0xFF, h7 & 0xFF);
+		}
+		return arr;
+	};
+
+	Sha256.prototype.array = Sha256.prototype.digest;
+
+	Sha256.prototype.arrayBuffer = function () {
+		this.finalize();
+
+		var buffer = new ArrayBuffer(this.is224 ? 28 : 32);
+		var dataView = new DataView(buffer);
+		dataView.setUint32(0, this.h0);
+		dataView.setUint32(4, this.h1);
+		dataView.setUint32(8, this.h2);
+		dataView.setUint32(12, this.h3);
+		dataView.setUint32(16, this.h4);
+		dataView.setUint32(20, this.h5);
+		dataView.setUint32(24, this.h6);
+		if (!this.is224) {
+			dataView.setUint32(28, this.h7);
+		}
+		return buffer;
+	};
+
+	function HmacSha256(key, is224, sharedMemory) {
+		var i, type = typeof key;
+		if (type === 'string') {
+			var bytes = [], length = key.length, index = 0, code;
+			for (i = 0; i < length; ++i) {
+				code = key.charCodeAt(i);
+				if (code < 0x80) {
+					bytes[index++] = code;
+				} else if (code < 0x800) {
+					bytes[index++] = (0xc0 | (code >>> 6));
+					bytes[index++] = (0x80 | (code & 0x3f));
+				} else if (code < 0xd800 || code >= 0xe000) {
+					bytes[index++] = (0xe0 | (code >>> 12));
+					bytes[index++] = (0x80 | ((code >>> 6) & 0x3f));
+					bytes[index++] = (0x80 | (code & 0x3f));
+				} else {
+					code = 0x10000 + (((code & 0x3ff) << 10) | (key.charCodeAt(++i) & 0x3ff));
+					bytes[index++] = (0xf0 | (code >>> 18));
+					bytes[index++] = (0x80 | ((code >>> 12) & 0x3f));
+					bytes[index++] = (0x80 | ((code >>> 6) & 0x3f));
+					bytes[index++] = (0x80 | (code & 0x3f));
+				}
+			}
+			key = bytes;
+		} else {
+			if (type === 'object') {
+				if (key === null) {
+					throw new Error(ERROR);
+				} else if (ARRAY_BUFFER && key.constructor === ArrayBuffer) {
+					key = new Uint8Array(key);
+				} else if (!Array.isArray(key)) {
+					if (!ARRAY_BUFFER || !ArrayBuffer.isView(key)) {
+						throw new Error(ERROR);
+					}
+				}
+			} else {
+				throw new Error(ERROR);
+			}
+		}
+
+		if (key.length > 64) {
+			key = (new Sha256(is224, true)).update(key).array();
+		}
+
+		var oKeyPad = [], iKeyPad = [];
+		for (i = 0; i < 64; ++i) {
+			var b = key[i] || 0;
+			oKeyPad[i] = 0x5c ^ b;
+			iKeyPad[i] = 0x36 ^ b;
+		}
+
+		Sha256.call(this, is224, sharedMemory);
+
+		this.update(iKeyPad);
+		this.oKeyPad = oKeyPad;
+		this.inner = true;
+		this.sharedMemory = sharedMemory;
 	}
 	HmacSha256.prototype = new Sha256();
-  
+
 	HmacSha256.prototype.finalize = function () {
-	  Sha256.prototype.finalize.call(this);
-	  if (this.inner) {
-		this.inner = false;
-		var innerHash = this.array();
-		Sha256.call(this, this.is224, this.sharedMemory);
-		this.update(this.oKeyPad);
-		this.update(innerHash);
 		Sha256.prototype.finalize.call(this);
-	  }
+		if (this.inner) {
+			this.inner = false;
+			var innerHash = this.array();
+			Sha256.call(this, this.is224, this.sharedMemory);
+			this.update(this.oKeyPad);
+			this.update(innerHash);
+			Sha256.prototype.finalize.call(this);
+		}
 	};
-  
+
 	var exports = createMethod();
 	exports.sha256 = exports;
 	exports.sha224 = createMethod(true);
 	exports.sha256.hmac = createHmacMethod();
 	exports.sha224.hmac = createHmacMethod(true);
-  
+
 	if (COMMON_JS) {
-	  module.exports = exports;
+		module.exports = exports;
 	} else {
-	  root.sha256 = exports.sha256;
-	  root.sha224 = exports.sha224;
-	  if (AMD) {
-		define(function () {
-		  return exports;
-		});
-	  }
+		root.sha256 = exports.sha256;
+		root.sha224 = exports.sha224;
+		if (AMD) {
+			define(function () {
+				return exports;
+			});
+		}
 	}
 })();
 
@@ -1784,17 +1810,17 @@ async function getAccountId(email, key) {
 		const data = await response.json();
 		return data.result[0].id; // 假设我们需要第一个账号ID
 	} catch (error) {
-		return false ;
+		return false;
 	}
 }
 
 async function getSum(accountId, accountIndex, email, key, startDate, endDate) {
-    try {
-        const startDateISO = new Date(startDate).toISOString();
-        const endDateISO = new Date(endDate).toISOString();
-    
-        const query = JSON.stringify({
-            query: `query getBillingMetrics($accountId: String!, $filter: AccountWorkersInvocationsAdaptiveFilter_InputObject) {
+	try {
+		const startDateISO = new Date(startDate).toISOString();
+		const endDateISO = new Date(endDate).toISOString();
+
+		const query = JSON.stringify({
+			query: `query getBillingMetrics($accountId: String!, $filter: AccountWorkersInvocationsAdaptiveFilter_InputObject) {
                 viewer {
                     accounts(filter: {accountTag: $accountId}) {
                         pagesFunctionsInvocationsAdaptiveGroups(limit: 1000, filter: $filter) {
@@ -1810,48 +1836,48 @@ async function getSum(accountId, accountIndex, email, key, startDate, endDate) {
                     }
                 }
             }`,
-            variables: {
-                accountId,
-                filter: { datetime_geq: startDateISO, datetime_leq: endDateISO }
-            },
-        });
-    
-        const headers = new Headers({
-            'Content-Type': 'application/json',
-            'X-AUTH-EMAIL': email,
-            'X-AUTH-KEY': key,
-        });
-    
-        const response = await fetch(`https://api.cloudflare.com/client/v4/graphql`, {
-            method: 'POST',
-            headers: headers,
-            body: query
-        });
-    
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-    
-        const res = await response.json();
-    
-        // 使用安全的方式访问嵌套属性，替代可选链操作符
-        const accounts = res && res.data && res.data.viewer && res.data.viewer.accounts;
-        const account = accounts && accounts[accountIndex];
-        const pagesFunctionsInvocationsAdaptiveGroups = account && account.pagesFunctionsInvocationsAdaptiveGroups;
-        const workersInvocationsAdaptive = account && account.workersInvocationsAdaptive;
-    
-        if (!pagesFunctionsInvocationsAdaptiveGroups && !workersInvocationsAdaptive) {
-            throw new Error('找不到数据');
-        }
-    
-        // 添加空值检查来确保安全访问属性
-        const pagesSum = pagesFunctionsInvocationsAdaptiveGroups.reduce((a, b) => a + (b && b.sum && b.sum.requests || 0), 0);
-        const workersSum = workersInvocationsAdaptive.reduce((a, b) => a + (b && b.sum && b.sum.requests || 0), 0);
-    
-        return [pagesSum, workersSum];
-    } catch (error) {
-        return [0, 0]; // 发生错误时返回默认值
-    }
+			variables: {
+				accountId,
+				filter: { datetime_geq: startDateISO, datetime_leq: endDateISO }
+			},
+		});
+
+		const headers = new Headers({
+			'Content-Type': 'application/json',
+			'X-AUTH-EMAIL': email,
+			'X-AUTH-KEY': key,
+		});
+
+		const response = await fetch(`https://api.cloudflare.com/client/v4/graphql`, {
+			method: 'POST',
+			headers: headers,
+			body: query
+		});
+
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		const res = await response.json();
+
+		// 使用安全的方式访问嵌套属性，替代可选链操作符
+		const accounts = res && res.data && res.data.viewer && res.data.viewer.accounts;
+		const account = accounts && accounts[accountIndex];
+		const pagesFunctionsInvocationsAdaptiveGroups = account && account.pagesFunctionsInvocationsAdaptiveGroups;
+		const workersInvocationsAdaptive = account && account.workersInvocationsAdaptive;
+
+		if (!pagesFunctionsInvocationsAdaptiveGroups && !workersInvocationsAdaptive) {
+			throw new Error('找不到数据');
+		}
+
+		// 添加空值检查来确保安全访问属性
+		const pagesSum = pagesFunctionsInvocationsAdaptiveGroups.reduce((a, b) => a + (b && b.sum && b.sum.requests || 0), 0);
+		const workersSum = workersInvocationsAdaptive.reduce((a, b) => a + (b && b.sum && b.sum.requests || 0), 0);
+
+		return [pagesSum, workersSum];
+	} catch (error) {
+		return [0, 0]; // 发生错误时返回默认值
+	}
 }
 
 /**
@@ -2000,40 +2026,40 @@ async function socks5Connect(addressType, addressRemote, portRemote, socks5URL, 
 }
 
 
-	/**
-	 * 
-	 * @param {string} address
-	 */
-	function socks5AddressParser(address) {
-		let [latter, former] = address.split("@").reverse();
-		let username, password, hostname, port;
-		if (former) {
-			const formers = former.split(":");
-			if (formers.length !== 2) {
-				throw new Error('Invalid SOCKS address format');
-			}
-			[username, password] = formers;
-		}
-		const latters = latter.split(":");
-		port = Number(latters.pop());
-		if (isNaN(port)) {
+/**
+ * 
+ * @param {string} address
+ */
+function socks5AddressParser(address) {
+	let [latter, former] = address.split("@").reverse();
+	let username, password, hostname, port;
+	if (former) {
+		const formers = former.split(":");
+		if (formers.length !== 2) {
 			throw new Error('Invalid SOCKS address format');
 		}
-		hostname = latters.join(":");
-		const regex = /^\[.*\]$/;
-		if (hostname.includes(":") && !regex.test(hostname)) {
-			throw new Error('Invalid SOCKS address format');
-		}
-		//if (/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(hostname)) hostname = `${atob('d3d3Lg==')}${hostname}${atob('LmlwLjA5MDIyNy54eXo=')}`;
-		return {
-			username,
-			password,
-			hostname,
-			port,
-		}
+		[username, password] = formers;
 	}
+	const latters = latter.split(":");
+	port = Number(latters.pop());
+	if (isNaN(port)) {
+		throw new Error('Invalid SOCKS address format');
+	}
+	hostname = latters.join(":");
+	const regex = /^\[.*\]$/;
+	if (hostname.includes(":") && !regex.test(hostname)) {
+		throw new Error('Invalid SOCKS address format');
+	}
+	//if (/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?).){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(hostname)) hostname = `${atob('d3d3Lg==')}${hostname}${atob('LmlwLjA5MDIyNy54eXo=')}`;
+	return {
+		username,
+		password,
+		hostname,
+		port,
+	}
+}
 
-	function isValidIPv4(address) {
-		const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-		return ipv4Regex.test(address);
-	}
+function isValidIPv4(address) {
+	const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+	return ipv4Regex.test(address);
+}
